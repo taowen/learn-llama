@@ -4,4 +4,4 @@ tokenizer = LlamaTokenizer.from_pretrained('../weights/llama-7b-hf')
 tokenizer.save_pretrained('../weights/llama-7b-hf-safetensors')
 
 model = LlamaForCausalLM.from_pretrained('../weights/llama-7b-hf')
-model.save_pretrained('../weights/llama-7b-hf-safetensors')
+model.save_pretrained('../weights/llama-7b-hf-safetensors', safe_serialization=True)
