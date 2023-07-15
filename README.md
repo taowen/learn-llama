@@ -36,6 +36,7 @@ llama+gptq has multiple open source impelementations, it is like hello world for
 * https://github.com/young-geng/EasyLM/blob/main/EasyLM/models/llama/llama_model.py
 * https://github.com/davisyoshida/llama-haiku/blob/master/llama_haiku/model.py
 * https://github.com/p-nordmann/eqx-llama/blob/master/eqx_llama/model.py
+* https://github.com/Noeda/rllama
 
 ## gptq quantization
 * https://github.com/IST-DASLab/gptq
