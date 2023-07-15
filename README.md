@@ -14,6 +14,8 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/marella/ctransformers/blob/main/models/llms/llama.cc
 * https://github.com/OpenNMT/CTranslate2/blob/master/python/ctranslate2/converters/transformers.py
 * https://github.com/kayvr/token-hawk
+* https://github.com/NolanoOrg/sparse_quant_llms/blob/main/llama_model.py
+* https://github.com/rustformers/llm/blob/main/crates/models/llama/src/lib.rs
 
 ## gptq quantization
 * https://github.com/IST-DASLab/gptq
@@ -25,3 +27,4 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/mlc-ai/mlc-llm/blob/main/mlc_llm/quantization/autogptq_quantization.py
 * https://github.com/LeiWang1999/AutoGPTQ.tvm
 * https://github.com/K024/chatglm-q/blob/main/chatglm_q/int4/triton_ops.py
+* https://github.com/3outeille/GPTQ-for-RWKV/blob/master/quant_cuda_kernel.cu
