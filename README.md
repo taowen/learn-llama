@@ -8,6 +8,8 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/turboderp/exllama
 * https://github.com/Lightning-AI/lit-llama
 * https://github.com/huggingface/transformers/tree/main/src/transformers/models/llama
+* https://github.com/marella/ctransformers/blob/main/models/llms/llama.cc
+* https://github.com/OpenNMT/CTranslate2/blob/master/python/ctranslate2/converters/transformers.py
 
 ## gptq quantization
 * https://github.com/IST-DASLab/gptq
