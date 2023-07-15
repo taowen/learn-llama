@@ -31,6 +31,14 @@ embed_tokens = torch.nn.Embedding(
 import torch
 with torch.inference_mode():
     # the 0 layer: embedding
+    # convert input_ids from long[] to 2D tensor (batch_size, sequence_length)
+    # we only have 1 batch here, so unsqueeze(0)
+    # The 0 in torch.unsqueeze(input, 0) indicates the dimension index at which you want to insert the new axis.
+    # By convention:
+    # Dimension 0 is the batch dimension
+    # Dimension 1 is the sequence length dimension
+    # Dimension 2 is the embedding dimension
+    # This inserts a new axis (dimension) of size 1 at index 0, which becomes the new batch dimension.
     input_ids = torch.tensor(input_ids, dtype=torch.long).unsqueeze(0)
     print(input_ids)
     inputs_embeds = embed_tokens(input_ids)
