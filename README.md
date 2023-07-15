@@ -2,6 +2,9 @@
 
 llama+gptq has multiple open source impelementations. This makes learning how to re-implement llama+gptq on other programming api much easier.
 
+## tokenizer
+* https://github.com/google/sentencepiece
+
 ## llama model
 * https://github.com/facebookresearch/llama
 * https://github.com/ggerganov/llama.cpp
@@ -20,3 +23,4 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/fpgaminer/GPTQ-triton
 * https://github.com/Lightning-AI/lit-llama/blob/main/lit_llama/quantization.py
 * https://github.com/mlc-ai/mlc-llm/blob/main/mlc_llm/quantization/autogptq_quantization.py
+* https://github.com/LeiWang1999/AutoGPTQ.tvm
