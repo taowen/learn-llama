@@ -24,3 +24,4 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/Lightning-AI/lit-llama/blob/main/lit_llama/quantization.py
 * https://github.com/mlc-ai/mlc-llm/blob/main/mlc_llm/quantization/autogptq_quantization.py
 * https://github.com/LeiWang1999/AutoGPTQ.tvm
+* https://github.com/K024/chatglm-q/blob/main/chatglm_q/int4/triton_ops.py
