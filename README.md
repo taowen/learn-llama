@@ -1,5 +1,6 @@
 # learn-llama
-my personal learning log
+
+llama+gptq has multiple open source impelementations. This makes learning how to re-implement llama+gptq on other programming api much easier.
 
 ## llama model
 * https://github.com/facebookresearch/llama
