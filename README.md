@@ -28,3 +28,4 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/LeiWang1999/AutoGPTQ.tvm
 * https://github.com/K024/chatglm-q/blob/main/chatglm_q/int4/triton_ops.py
 * https://github.com/3outeille/GPTQ-for-RWKV/blob/master/quant_cuda_kernel.cu
+* https://github.com/davisyoshida/jax-gptq
