@@ -2,6 +2,10 @@
 
 llama+gptq has multiple open source impelementations. This makes learning how to re-implement llama+gptq on other programming api much easier.
 
+## gpt introduction
+* https://jaykmody.com/blog/gpt-from-scratch/
+* https://github.com/lucidrains/x-transformers
+
 ## tokenizer
 * https://github.com/google/sentencepiece
 
@@ -20,6 +24,7 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/Sea-Snell/JAX_llama
 * https://github.com/mlc-ai/mlc-llm/blob/main/mlc_llm/relax_model/llama.py
 * https://github.com/juncongmoo/pyllama/blob/main/llama/hf/modeling_llama.py
+* https://github.com/recmo/cria/blob/main/cria.py
 
 ## gptq quantization
 * https://github.com/IST-DASLab/gptq
