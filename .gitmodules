@@ -1,0 +1,3 @@
+[submodule "weights/llama-7b-hf"]
+	path = weights/llama-7b-hf
+	url = https://huggingface.co/decapoda-research/llama-7b-hf
