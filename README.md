@@ -16,6 +16,10 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/kayvr/token-hawk
 * https://github.com/NolanoOrg/sparse_quant_llms/blob/main/llama_model.py
 * https://github.com/rustformers/llm/blob/main/crates/models/llama/src/lib.rs
+* https://github.com/thisserand/FastChat/blob/4a57c928a906705404eae06f7a44b4da45828487/fastchat/train/llama_flash_attn_monkey_patch.py
+* https://github.com/Sea-Snell/JAX_llama
+* https://github.com/mlc-ai/mlc-llm/blob/main/mlc_llm/relax_model/llama.py
+* https://github.com/juncongmoo/pyllama/blob/main/llama/hf/modeling_llama.py
 
 ## gptq quantization
 * https://github.com/IST-DASLab/gptq
@@ -28,4 +32,8 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/LeiWang1999/AutoGPTQ.tvm
 * https://github.com/K024/chatglm-q/blob/main/chatglm_q/int4/triton_ops.py
 * https://github.com/3outeille/GPTQ-for-RWKV/blob/master/quant_cuda_kernel.cu
+* https://github.com/davisyoshida/easy-lora-and-gptq
 * https://github.com/davisyoshida/jax-gptq
+* https://github.com/cannstandard/gptq-modal/blob/main/gptq_wrapper.py
+* https://github.com/thisserand/FastChat/blob/main/fastchat/serve/load_gptq_model.py
+* https://github.com/juncongmoo/pyllama/blob/main/llama/llama_quant.py
