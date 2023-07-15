@@ -5,6 +5,10 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 ## gpt introduction
 * https://jaykmody.com/blog/gpt-from-scratch/
 * https://github.com/lucidrains/x-transformers
+* https://github.com/karpathy/nanoGPT
+
+## weights
+* https://huggingface.co/huggyllama/llama-7b
 
 ## tokenizer
 * https://github.com/google/sentencepiece
@@ -25,6 +29,7 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/mlc-ai/mlc-llm/blob/main/mlc_llm/relax_model/llama.py
 * https://github.com/juncongmoo/pyllama/blob/main/llama/hf/modeling_llama.py
 * https://github.com/recmo/cria/blob/main/cria.py
+* https://github.com/ypeleg/llama/blob/master/llama/modeling_llama.py
 
 ## gptq quantization
 * https://github.com/IST-DASLab/gptq
