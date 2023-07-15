@@ -33,6 +33,7 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/gotzmann/llama.go/blob/main/pkg/llama/llama.go
 * https://github.com/zphang/minimal-llama/blob/main/minimal_llama/model.py
 * https://github.com/jankais3r/LLaMA_MPS/blob/main/llama/model.py
+* https://github.com/young-geng/EasyLM/blob/main/EasyLM/models/llama/llama_model.py
 
 ## gptq quantization
 * https://github.com/IST-DASLab/gptq
