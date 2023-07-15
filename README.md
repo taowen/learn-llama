@@ -1,6 +1,6 @@
 # learn-llama
 
-llama+gptq has multiple open source impelementations. This makes learning how to re-implement llama+gptq on other programming api much easier.
+llama+gptq has multiple open source impelementations. This makes learning how to re-implement llama+gptq on other programming api much easier. The goal is to learn the GPU programming stack especially the profilers, using llama+gptq as an learning exercise.
 
 ## gpt introduction
 * https://jaykmody.com/blog/gpt-from-scratch/
@@ -30,6 +30,8 @@ llama+gptq has multiple open source impelementations. This makes learning how to
 * https://github.com/juncongmoo/pyllama/blob/main/llama/hf/modeling_llama.py
 * https://github.com/recmo/cria/blob/main/cria.py
 * https://github.com/ypeleg/llama/blob/master/llama/modeling_llama.py
+* https://github.com/gotzmann/llama.go/blob/main/pkg/llama/llama.go
+* https://github.com/zphang/minimal-llama/blob/main/minimal_llama/model.py
 
 ## gptq quantization
 * https://github.com/IST-DASLab/gptq
