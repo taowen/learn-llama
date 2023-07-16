@@ -56,3 +56,7 @@ llama+gptq has multiple open source impelementations, it is like hello world for
 * https://github.com/cannstandard/gptq-modal/blob/main/gptq_wrapper.py
 * https://github.com/thisserand/FastChat/blob/main/fastchat/serve/load_gptq_model.py
 * https://github.com/juncongmoo/pyllama/blob/main/llama/llama_quant.py
+
+====
+
+拉一个民用设备跑大模型的微信群。入群条件提供你在 https://www.reddit.com/r/LocalLLaMA/ 上发的帖子或者评论的截图，然后发给我的微信号（bmN0YW93ZW4=）。
