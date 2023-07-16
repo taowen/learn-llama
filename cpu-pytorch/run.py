@@ -3,10 +3,10 @@ def main():
     # tokenize
     sp = sentencepiece.SentencePieceProcessor()
     sp.load('../weights/llama-7b-hf-safetensors/tokenizer.model')
-    input_ids = sp.encode('Once upon a time, ')
+    input_ids = [0] + sp.encode('Once upon a time, ')
     print(input_ids)
     # tensor([[    0,  9038,  2501,   263,   931, 29892, 29871]])
-    # [9038, 2501, 263, 931, 29892, 29871]
+    # [0, 9038, 2501, 263, 931, 29892, 29871]
 
     # load embed_tokens_tensor
     from safetensors import safe_open
@@ -42,9 +42,7 @@ def main():
         # Dimension 2 is the embedding dimension
         # This inserts a new axis (dimension) of size 1 at index 0, which becomes the new batch dimension.
         input_ids = torch.tensor(input_ids, dtype=torch.long).unsqueeze(0)
-        print(input_ids)
         inputs_embeds = embed_tokens(input_ids)
-        print(inputs_embeds)
         # Make causal mask
         bsz, tgt_len = input_ids.size()
         mask = torch.full((tgt_len, tgt_len), torch.tensor(torch.finfo(inputs_embeds.dtype).min, device=device), device=device)
@@ -59,12 +57,18 @@ def main():
             )
         position_ids = position_ids.unsqueeze(0).view(-1, tgt_len)
         print(position_ids)
-        decode_layer(0)
+        decode_layer(config, index=0, hidden_states=inputs_embeds)
 
-def decode_layer(index):
+def decode_layer(config, index, hidden_states):
     from safetensors import safe_open
+    import torch
+    # layer norm
     with safe_open("../weights/llama-7b-hf-safetensors/model-00001-of-00003.safetensors", framework="pt") as f:
         input_layernorm_tensor = f.get_tensor(f'model.layers.{index}.input_layernorm.weight')
+    input_dtype = hidden_states.dtype
+    variance = hidden_states.to(torch.float32).pow(2).mean(-1, keepdim=True)
+    hidden_states = hidden_states * torch.rsqrt(variance + config['rms_norm_eps'])
+    hidden_states = (input_layernorm_tensor * hidden_states).to(input_dtype)
     # self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
     # hidden_states = self.input_layernorm(hidden_states)
 
