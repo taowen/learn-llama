@@ -1,5 +1,12 @@
 from dataclasses import dataclass
 
+def main():
+    import torch
+    with torch.inference_mode():
+        cache = GlobalCache()
+        layer1 = LayerCache(index=0, input=input_embeds(cache))
+        decode_layer(cache, layer1)
+
 @dataclass
 class GlobalCache:
     config: any = None
@@ -55,7 +62,7 @@ def embed_tokens(cache: GlobalCache):
         _weight=safetensors_00001('model.embed_tokens.weight'))
 
 def input_embeds(cache: GlobalCache):
-    if cache.input_embeds:
+    if cache.input_embeds is not None:
         return cache.input_embeds
     cache.input_embeds = embed_tokens(cache).forward(input_ids(cache))
     return cache.input_embeds
@@ -90,26 +97,35 @@ def position_ids():
 class LayerCache:
     index: int
     input: any
-    input_layernorm_weight: any = None
+    input_layernorm: any = None
+    q_proj: any = None
 
-def input_layernorm_weight(layer: LayerCache):
-    if layer.input_layernorm_weight:
-        return layer.input_layernorm_weight
-    layer.input_layernorm_weight = safetensors_00001(f'model.layers.{layer.index}.input_layernorm.weight')
-    return layer.input_layernorm_weight
+def input_layernorm(layer: LayerCache):
+    from torch import nn
+    if layer.input_layernorm is None:
+        weight = safetensors_00001(f'model.layers.{layer.index}.input_layernorm.weight')
+        layer.input_layernorm = nn.Parameter(weight)
+    return layer.input_layernorm
 
-def processed_by_layernorm(cache: GlobalCache, layer: LayerCache):
+def q_proj(cache: GlobalCache, layer: LayerCache):
+    from torch import nn
+    if layer.q_proj is None:
+        config = model_config(cache)
+        head_dim = config['hidden_size'] // config['num_attention_heads']
+        layer.q_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim, bias=False)
+        layer.q_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.self_attn.q_proj.weight'))
+    return layer.q_proj
+
+def decode_layer(cache: GlobalCache, layer: LayerCache):
     import torch
     variance = layer.input.to(torch.float32).pow(2).mean(-1, keepdim=True)
     hidden_states = layer.input * torch.rsqrt(variance + model_config(cache)['rms_norm_eps'])
-    hidden_states = (input_layernorm_weight(layer) * hidden_states).to(layer.input.dtype)
+    hidden_states = (input_layernorm(layer) * hidden_states).to(layer.input.dtype)
+    bsz, q_len, _ = hidden_states.size()
+    config = model_config(cache)
+    head_dim = config['hidden_size'] // config['num_attention_heads']
+    query_states = q_proj(cache, layer).forward(hidden_states).view(bsz, q_len, config['num_attention_heads'], head_dim).transpose(1, 2)
+    # key_states = self.k_proj(hidden_states).view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
     return hidden_states
-
-def main():
-    import torch
-    with torch.inference_mode():
-        cache = GlobalCache()
-        layer1 = LayerCache(index=1, input=input_embeds(cache))
-        print(processed_by_layernorm(cache, layer1))
 
 main()
