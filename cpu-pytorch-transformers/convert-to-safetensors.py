@@ -1,7 +1,7 @@
 from transformers import LlamaTokenizer, LlamaForCausalLM
 
-tokenizer = LlamaTokenizer.from_pretrained('../weights/llama-7b-hf')
-tokenizer.save_pretrained('../weights/llama-7b-hf-safetensors')
+tokenizer = LlamaTokenizer.from_pretrained('../weights/open_llama_3b_v2')
+tokenizer.save_pretrained('../weights/open_llama_3b_v2_safetensors')
 
-model = LlamaForCausalLM.from_pretrained('../weights/llama-7b-hf')
-model.save_pretrained('../weights/llama-7b-hf-safetensors', safe_serialization=True)
+model = LlamaForCausalLM.from_pretrained('../weights/open_llama_3b_v2')
+model.save_pretrained('../weights/open_llama_3b_v2_safetensors', safe_serialization=True)

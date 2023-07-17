@@ -1,3 +1,6 @@
 [submodule "weights/llama-7b-hf"]
 	path = weights/llama-7b-hf
 	url = https://huggingface.co/decapoda-research/llama-7b-hf
+[submodule "weights/open_llama_3b_v2"]
+	path = weights/open_llama_3b_v2
+	url = https://huggingface.co/openlm-research/open_llama_3b_v2
