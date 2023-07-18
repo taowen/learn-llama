@@ -18,24 +18,40 @@ class LayerCache:
     k_proj: any = None
     v_proj: any = None
     o_proj: any = None
+    gate_proj: any = None
+    down_proj: any = None
+    up_proj: any = None
 
 def main():
     import torch
-    with torch.inference_mode():
-        cache = GlobalCache(device=torch.device('cpu'))
-        layer1 = LayerCache(index=0)
-        input_ids = torch.tensor(tokenize(cache, 'Once upon a time, '), dtype=torch.long).unsqueeze(0)
-        input_embeds = embed_tokens(cache).forward(input_ids)
-        decode_layer(cache, layer1, input_embeds=input_embeds)
+    cache = GlobalCache(device=torch.device('cpu'))
+    layer0 = LayerCache(index=0)
+    input_ids = torch.tensor(tokenize(cache, 'Once upon a time, '), dtype=torch.long).unsqueeze(0)
+    input_embeds = embed_tokens(cache).forward(input_ids)
+    layer_input = input_embeds
+    layer_input = decode_layer(cache, layer0, layer_input=layer_input)
+    layer1 = LayerCache(index=1)
+    layer_input = decode_layer(cache, layer1, layer_input=layer_input)
+    layer2 = LayerCache(index=2)
+    layer_input = decode_layer(cache, layer2, layer_input=layer_input)
+    layer3 = LayerCache(index=3)
+    layer_input = decode_layer(cache, layer3, layer_input=layer_input)
+    layer4 = LayerCache(index=4)
+    layer_input = decode_layer(cache, layer4, layer_input=layer_input)
+    layer5 = LayerCache(index=5)
+    layer_input = decode_layer(cache, layer5, layer_input=layer_input)
 
-def decode_layer(cache: GlobalCache, layer: LayerCache, input_embeds):
-    input_layernormed = input_layernorm(cache, layer, input_embeds)
+
+def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
+    input_layernormed = input_layernorm(cache, layer, layer_input)
     attn_output = self_attn(cache, layer, input_layernormed)
     # input_embeds is residual
-    attn_output = input_embeds + attn_output
+    attn_output = layer_input + attn_output
     attn_output_layernormed = post_attention_layernorm(cache, layer, attn_output)
-    print(attn_output_layernormed[0][0])
-    return attn_output
+    layer_output = mlp(cache, layer, attn_output_layernormed)
+    # attn_output is residual
+    layer_output = attn_output + layer_output
+    return layer_output
 
 def input_layernorm(cache: GlobalCache, layer: LayerCache, input_embeds):
     return rms_layernorm(cache, input_layernorm_weight(layer), input_embeds)
@@ -219,4 +235,37 @@ def causal_mask_of_seq(cache: GlobalCache, seq_len: int):
     causal_mask = causal_mask[None, None, :, :].expand(bsz, 1, seq_len, seq_len)
     return causal_mask
 
-main()
+def gate_proj(cache: GlobalCache, layer: LayerCache):
+    from torch import nn
+    if layer.gate_proj is None:
+        config = model_config(cache)
+        layer.gate_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
+        layer.gate_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.mlp.gate_proj.weight'))
+    return layer.gate_proj
+
+def down_proj(cache: GlobalCache, layer: LayerCache):
+    from torch import nn
+    if layer.down_proj is None:
+        config = model_config(cache)
+        layer.down_proj = nn.Linear(config['intermediate_size'], config['hidden_size'], bias=False)
+        layer.down_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.mlp.down_proj.weight'))
+    return layer.down_proj
+
+def up_proj(cache: GlobalCache, layer: LayerCache):
+    from torch import nn
+    if layer.up_proj is None:
+        config = model_config(cache)
+        layer.up_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
+        layer.up_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.mlp.up_proj.weight'))
+    return layer.up_proj
+
+def mlp(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
+    from torch import nn
+    gate_projected = gate_proj(cache, layer).forward(attn_output_layernormed)
+    up_projected = up_proj(cache, layer)(attn_output_layernormed)
+    return down_proj(cache, layer).forward(nn.functional.silu(gate_projected) * up_projected)
+
+
+import torch
+with torch.inference_mode():
+    main()
