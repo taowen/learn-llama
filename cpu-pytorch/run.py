@@ -3,6 +3,7 @@ from dataclasses import dataclass
 @dataclass
 class GlobalCache:
     device: any
+    safetensors_index = None
     embed_tokens = None
     config: any = None
     head_dim: any = None
@@ -40,6 +41,46 @@ def main():
     layer_input = decode_layer(cache, layer4, layer_input=layer_input)
     layer5 = LayerCache(index=5)
     layer_input = decode_layer(cache, layer5, layer_input=layer_input)
+    layer6 = LayerCache(index=6)
+    layer_input = decode_layer(cache, layer6, layer_input=layer_input)
+    layer7 = LayerCache(index=7)
+    layer_input = decode_layer(cache, layer7, layer_input=layer_input)
+    layer8 = LayerCache(index=8)
+    layer_input = decode_layer(cache, layer8, layer_input=layer_input)
+    layer9 = LayerCache(index=9)
+    layer_input = decode_layer(cache, layer9, layer_input=layer_input)
+    layer10 = LayerCache(index=10)
+    layer_input = decode_layer(cache, layer10, layer_input=layer_input)
+    layer11 = LayerCache(index=11)
+    layer_input = decode_layer(cache, layer11, layer_input=layer_input)
+    layer12 = LayerCache(index=12)
+    layer_input = decode_layer(cache, layer12, layer_input=layer_input)
+    layer13 = LayerCache(index=13)
+    layer_input = decode_layer(cache, layer13, layer_input=layer_input)
+    layer14 = LayerCache(index=14)
+    layer_input = decode_layer(cache, layer14, layer_input=layer_input)
+    layer15 = LayerCache(index=15)
+    layer_input = decode_layer(cache, layer15, layer_input=layer_input)  
+    layer16 = LayerCache(index=16)
+    layer_input = decode_layer(cache, layer16, layer_input=layer_input)
+    layer17 = LayerCache(index=17)
+    layer_input = decode_layer(cache, layer17, layer_input=layer_input)
+    layer18 = LayerCache(index=18)
+    layer_input = decode_layer(cache, layer18, layer_input=layer_input)
+    layer19 = LayerCache(index=19)
+    layer_input = decode_layer(cache, layer19, layer_input=layer_input)
+    layer20 = LayerCache(index=20)
+    layer_input = decode_layer(cache, layer20, layer_input=layer_input)
+    layer21 = LayerCache(index=21)  
+    layer_input = decode_layer(cache, layer21, layer_input=layer_input)  
+    layer22 = LayerCache(index=22)
+    layer_input = decode_layer(cache, layer22, layer_input=layer_input)
+    layer23 = LayerCache(index=23)
+    layer_input = decode_layer(cache, layer23, layer_input=layer_input)
+    layer24 = LayerCache(index=24)
+    layer_input = decode_layer(cache, layer24, layer_input=layer_input)
+    layer25 = LayerCache(index=25)
+    layer_input = decode_layer(cache, layer25, layer_input=layer_input)
 
 
 def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
@@ -54,10 +95,10 @@ def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
     return layer_output
 
 def input_layernorm(cache: GlobalCache, layer: LayerCache, input_embeds):
-    return rms_layernorm(cache, input_layernorm_weight(layer), input_embeds)
+    return rms_layernorm(cache, input_layernorm_weight(cache, layer), input_embeds)
 
 def post_attention_layernorm(cache: GlobalCache, layer: LayerCache, input_embeds):
-    return rms_layernorm(cache, post_attention_layernorm_weight(layer), input_embeds)
+    return rms_layernorm(cache, post_attention_layernorm_weight(cache, layer), input_embeds)
 
 def rms_layernorm(cache: GlobalCache, weight, input_embeds):
     import torch
@@ -66,17 +107,17 @@ def rms_layernorm(cache: GlobalCache, weight, input_embeds):
     input_layernormed = (weight * input_layernormed).to(input_embeds.dtype)
     return input_layernormed
 
-def input_layernorm_weight(layer: LayerCache):
+def input_layernorm_weight(cache: GlobalCache, layer: LayerCache):
     from torch import nn
     if layer.input_layernorm_weight is None:
-        weight = safetensors_00001(f'model.layers.{layer.index}.input_layernorm.weight')
+        weight = load_safetensors(cache, f'model.layers.{layer.index}.input_layernorm.weight')
         layer.input_layernorm_weight = nn.Parameter(weight)
     return layer.input_layernorm_weight
 
-def post_attention_layernorm_weight(layer: LayerCache):
+def post_attention_layernorm_weight(cache: GlobalCache, layer: LayerCache):
     from torch import nn
     if layer.post_attention_layernorm_weight is None:
-        weight = safetensors_00001(f'model.layers.{layer.index}.post_attention_layernorm.weight')
+        weight = load_safetensors(cache, f'model.layers.{layer.index}.post_attention_layernorm.weight')
         layer.post_attention_layernorm_weight = nn.Parameter(weight)
     return layer.post_attention_layernorm_weight
 
@@ -101,9 +142,14 @@ def tokenize(cache: GlobalCache, input: str):
     # [0, 9038, 2501, 263, 931, 29892, 29871]
     return [model_config(cache)['bos_token_id']] + sp.encode(input)
 
-def safetensors_00001(key):
+def load_safetensors(cache: GlobalCache, key):
+    import json
     from safetensors import safe_open
-    with safe_open(f'{model_path()}/model-00001-of-00002.safetensors', framework="pt") as f:
+    if cache.safetensors_index is None:
+        with open(f'{model_path()}/model.safetensors.index.json') as f:
+            cache.safetensors_index = json.loads(f.read())
+    safetensor_file = cache.safetensors_index['weight_map'][key]
+    with safe_open(f'{model_path()}/{safetensor_file}', framework="pt") as f:
         return f.get_tensor(key)
     
 def embed_tokens(cache: GlobalCache):
@@ -111,7 +157,7 @@ def embed_tokens(cache: GlobalCache):
     if cache.embed_tokens is None:
         config = model_config(cache)
         cache.embed_tokens = torch.nn.Embedding(config['vocab_size'], config['hidden_size'], config['pad_token_id'])
-        cache.embed_tokens.weight = torch.nn.Parameter(safetensors_00001('model.embed_tokens.weight'))
+        cache.embed_tokens.weight = torch.nn.Parameter(load_safetensors(cache, 'model.embed_tokens.weight'))
     return cache.embed_tokens
 
 def head_dim(cache: GlobalCache):
@@ -151,7 +197,7 @@ def q_proj(cache: GlobalCache, layer: LayerCache):
     if layer.q_proj is None:
         config = model_config(cache)
         layer.q_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
-        layer.q_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.self_attn.q_proj.weight'))
+        layer.q_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.q_proj.weight'))
     return layer.q_proj
 
 def k_proj(cache: GlobalCache, layer: LayerCache):
@@ -159,7 +205,7 @@ def k_proj(cache: GlobalCache, layer: LayerCache):
     if layer.k_proj is None:
         config = model_config(cache)
         layer.k_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
-        layer.k_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.self_attn.k_proj.weight'))
+        layer.k_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.k_proj.weight'))
     return layer.k_proj
 
 def v_proj(cache: GlobalCache, layer: LayerCache):
@@ -167,7 +213,7 @@ def v_proj(cache: GlobalCache, layer: LayerCache):
     if layer.v_proj is None:
         config = model_config(cache)
         layer.v_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
-        layer.v_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.self_attn.v_proj.weight'))
+        layer.v_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.v_proj.weight'))
     return layer.v_proj
 
 def o_proj(cache: GlobalCache, layer: LayerCache):
@@ -175,7 +221,7 @@ def o_proj(cache: GlobalCache, layer: LayerCache):
     if layer.o_proj is None:
         config = model_config(cache)
         layer.o_proj = nn.Linear(config['num_attention_heads'] * head_dim(cache), config['hidden_size'], bias=False)
-        layer.o_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.self_attn.o_proj.weight'))
+        layer.o_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.o_proj.weight'))
     return layer.o_proj
 
 def inv_freq(cache: GlobalCache):
@@ -240,7 +286,7 @@ def gate_proj(cache: GlobalCache, layer: LayerCache):
     if layer.gate_proj is None:
         config = model_config(cache)
         layer.gate_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
-        layer.gate_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.mlp.gate_proj.weight'))
+        layer.gate_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.gate_proj.weight'))
     return layer.gate_proj
 
 def down_proj(cache: GlobalCache, layer: LayerCache):
@@ -248,7 +294,7 @@ def down_proj(cache: GlobalCache, layer: LayerCache):
     if layer.down_proj is None:
         config = model_config(cache)
         layer.down_proj = nn.Linear(config['intermediate_size'], config['hidden_size'], bias=False)
-        layer.down_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.mlp.down_proj.weight'))
+        layer.down_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.down_proj.weight'))
     return layer.down_proj
 
 def up_proj(cache: GlobalCache, layer: LayerCache):
@@ -256,7 +302,7 @@ def up_proj(cache: GlobalCache, layer: LayerCache):
     if layer.up_proj is None:
         config = model_config(cache)
         layer.up_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
-        layer.up_proj.weight = nn.Parameter(safetensors_00001(f'model.layers.{layer.index}.mlp.up_proj.weight'))
+        layer.up_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.up_proj.weight'))
     return layer.up_proj
 
 def mlp(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
