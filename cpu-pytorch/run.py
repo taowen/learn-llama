@@ -9,6 +9,8 @@ class GlobalCache:
     head_dim: any = None
     inv_freq: any = None
     rotary_emb: any = None
+    output_layernorm_weight: any = None
+    lm_head: any = None
 
 @dataclass
 class LayerCache:
@@ -80,7 +82,12 @@ def main():
     layer24 = LayerCache(index=24)
     layer_input = decode_layer(cache, layer24, layer_input=layer_input)
     layer25 = LayerCache(index=25)
-    layer_input = decode_layer(cache, layer25, layer_input=layer_input)
+    output = decode_layer(cache, layer25, layer_input=layer_input)
+    output_layernormed = output_layernorm(cache, output)
+    logits = lm_head(cache).forward(output_layernormed)
+    next_token_logits = logits[:, -1, :]
+    next_tokens = torch.argmax(next_token_logits, dim=-1)
+    print(next_tokens) # tensor([29532])
 
 
 def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
@@ -94,11 +101,22 @@ def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
     layer_output = attn_output + layer_output
     return layer_output
 
+def lm_head(cache: GlobalCache):
+    import torch
+    if cache.lm_head is None:
+        config = model_config(cache)
+        cache.lm_head = torch.nn.Linear(config['hidden_size'], config['vocab_size'], bias=False)
+        cache.lm_head.weight = torch.nn.Parameter(load_safetensors(cache, 'lm_head.weight'))
+    return cache.lm_head
+
 def input_layernorm(cache: GlobalCache, layer: LayerCache, input_embeds):
     return rms_layernorm(cache, input_layernorm_weight(cache, layer), input_embeds)
 
 def post_attention_layernorm(cache: GlobalCache, layer: LayerCache, input_embeds):
     return rms_layernorm(cache, post_attention_layernorm_weight(cache, layer), input_embeds)
+
+def output_layernorm(cache: GlobalCache, output):
+    return rms_layernorm(cache, output_layernorm_weight(cache), output)
 
 def rms_layernorm(cache: GlobalCache, weight, input_embeds):
     import torch
@@ -120,6 +138,13 @@ def post_attention_layernorm_weight(cache: GlobalCache, layer: LayerCache):
         weight = load_safetensors(cache, f'model.layers.{layer.index}.post_attention_layernorm.weight')
         layer.post_attention_layernorm_weight = nn.Parameter(weight)
     return layer.post_attention_layernorm_weight
+
+def output_layernorm_weight(cache: GlobalCache):
+    from torch import nn
+    if cache.output_layernorm_weight is None:
+        weight = load_safetensors(cache, f'model.norm.weight')
+        cache.output_layernorm_weight = nn.Parameter(weight)
+    return cache.output_layernorm_weight
 
 def model_path():
     return '../weights/open_llama_3b_v2_safetensors'

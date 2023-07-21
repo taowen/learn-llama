@@ -14,4 +14,4 @@ print(generated_tokens)
 decoded = tokenizer.decode(generated_tokens[0])
 print(decoded)
 
-# 100 years ago, a young man named Jack was born. He was a very brave boy, and he loved to play with his friends. One day, Jack and his friends were playing in the woods.
+# 10 years ago, I was a young, single, and very naive woman. I was living in a small town in the middle of nowhere, and I was working at a local grocery store. I was
