@@ -191,7 +191,10 @@ def load_safetensors(cache: GlobalCache, key):
 def embed_tokens(cache: GlobalCache):
     if cache.embed_tokens is None:
         config = model_config(cache)
-        cache.embed_tokens = torch.nn.Embedding(config['vocab_size'], config['hidden_size'], config['pad_token_id'])
+        cache.embed_tokens = torch.nn.Embedding(
+            num_embeddings=config['vocab_size'], 
+            embedding_dim=config['hidden_size'], 
+            padding_idx=config['pad_token_id'])
         cache.embed_tokens.weight = torch.nn.Parameter(load_safetensors(cache, 'model.embed_tokens.weight'))
     return cache.embed_tokens
 
@@ -213,14 +216,14 @@ def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     kv_seq_len = key_states.shape[-2]
     cos, sin = rotary_emb(cache, kv_seq_len, value_states.dtype)
     position_ids = position_ids_of_seq(cache, kv_seq_len)
-    query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
-    attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(head_dim(cache))
+    pos_query_states, pos_key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
+    attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(2, 3)) / math.sqrt(head_dim(cache))
     causal_mask = causal_mask_of_seq(cache, kv_seq_len)
     attn_weights = attn_weights + causal_mask
     attn_weights = torch.max(
         attn_weights, torch.tensor(torch.finfo(attn_weights.dtype).min, device=attn_weights.device)
     )
-    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(pos_query_states.dtype)
     attn_output = torch.matmul(attn_weights, value_states)
     attn_output = attn_output.transpose(1, 2)
     attn_output = attn_output.reshape(bsz, q_len, config['hidden_size'])
