@@ -1,4 +1,10 @@
 from dataclasses import dataclass
+import torch
+from torch import nn
+import json
+import sentencepiece
+import safetensors
+import math
 
 @dataclass
 class LayerCache:
@@ -28,33 +34,35 @@ class GlobalCache:
     sp: any = None
 
 def main():
-    import torch
     cache = GlobalCache(device=torch.device('cpu'), layers=[LayerCache(index=i) for i in range(26)])
     input_ids = torch.tensor(tokenizer_encode(cache, 'Once upon a time, '), dtype=torch.long)
+    print('input_ids', input_ids) # tensor([    1,  4095,  3194,   260,   632, 29522, 29500])
     output_ids = decode_one_token(cache, input_ids)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
+    print('output_ids', output_ids) # tensor([29532])
+    # output_ids = torch.concat([
+    #     output_ids,
+    #     decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    # ], dim=-1)
+    # output_ids = torch.concat([
+    #     output_ids,
+    #     decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    # ], dim=-1)
+    # output_ids = torch.concat([
+    #     output_ids,
+    #     decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    # ], dim=-1)
+    # output_ids = torch.concat([
+    #     output_ids,
+    #     decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    # ], dim=-1)
     print(tokenizer_decode(cache, output_ids.tolist()))
 
 def decode_one_token(cache: GlobalCache, input_ids):
     # input_ids is only one sequence
     # embed_tokens want a batch of sequence as input, so need to unsqueeze to add a dimension
+    print('input_ids.shape', input_ids.shape) # torch.Size([7])
     input_embeds = embed_tokens(cache).forward(input_ids.unsqueeze(0))
-
+    print('input_embeds.shape', input_embeds.shape) # torch.Size([1, 7, 3200])
     layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
     layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
     layer2_output = decode_layer(cache, cache.layers[2], layer_input=layer1_output)
@@ -84,24 +92,29 @@ def decode_one_token(cache: GlobalCache, input_ids):
 
     output_layernormed = output_layernorm(cache, layer25_output)
     logits = lm_head(cache).forward(output_layernormed)
-    next_token_logits = logits[:, -1, :]
-    next_tokens = torch.argmax(next_token_logits, dim=-1)
-    print('next_tokens', next_tokens) # tensor([29532])
+    next_tokens = torch.argmax(logits[:, -1, :], dim=-1)
     return next_tokens
 
 def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
     input_layernormed = input_layernorm(cache, layer, layer_input)
-    attn_output = self_attn(cache, layer, input_layernormed)
+    if layer.index == 0:
+        print('input_layernormed.shape', input_layernormed.shape) # torch.Size([1, 7, 3200])
+    attn_output = self_attn(cache, layer, input_layernormed) 
+    if layer.index == 0:
+        print('attn_output.shape', attn_output.shape) # torch.Size([1, 7, 3200])
     # input_embeds is residual
     attn_output = layer_input + attn_output
     attn_output_layernormed = post_attention_layernorm(cache, layer, attn_output)
+    if layer.index == 0:
+        print('attn_output_layernormed.shape', attn_output_layernormed.shape) # torch.Size([1, 7, 3200])
     layer_output = mlp(cache, layer, attn_output_layernormed)
+    if layer.index == 0:
+        print('layer_output.shape', layer_output.shape) # torch.Size([1, 7, 3200])
     # attn_output is residual
     layer_output = attn_output + layer_output
     return layer_output
 
 def lm_head(cache: GlobalCache):
-    import torch
     if cache.lm_head is None:
         config = model_config(cache)
         cache.lm_head = torch.nn.Linear(config['hidden_size'], config['vocab_size'], bias=False)
@@ -118,28 +131,24 @@ def output_layernorm(cache: GlobalCache, output):
     return rms_layernorm(cache, output_layernorm_weight(cache), output)
 
 def rms_layernorm(cache: GlobalCache, weight, input_embeds):
-    import torch
     variance = input_embeds.to(torch.float32).pow(2).mean(-1, keepdim=True)
     input_layernormed = input_embeds * torch.rsqrt(variance + model_config(cache)['rms_norm_eps'])
     input_layernormed = (weight * input_layernormed).to(input_embeds.dtype)
     return input_layernormed
 
 def input_layernorm_weight(cache: GlobalCache, layer: LayerCache):
-    from torch import nn
     if layer.input_layernorm_weight is None:
         weight = load_safetensors(cache, f'model.layers.{layer.index}.input_layernorm.weight')
         layer.input_layernorm_weight = nn.Parameter(weight)
     return layer.input_layernorm_weight
 
 def post_attention_layernorm_weight(cache: GlobalCache, layer: LayerCache):
-    from torch import nn
     if layer.post_attention_layernorm_weight is None:
         weight = load_safetensors(cache, f'model.layers.{layer.index}.post_attention_layernorm.weight')
         layer.post_attention_layernorm_weight = nn.Parameter(weight)
     return layer.post_attention_layernorm_weight
 
 def output_layernorm_weight(cache: GlobalCache):
-    from torch import nn
     if cache.output_layernorm_weight is None:
         weight = load_safetensors(cache, f'model.norm.weight')
         cache.output_layernorm_weight = nn.Parameter(weight)
@@ -152,15 +161,13 @@ def model_config(cache: GlobalCache):
     if cache.config:
         return cache.config
     # load config.json
-    import json
     with open(f'{model_path()}/config.json') as f:
         cache.config = json.loads(f.read())
-    print('config:', cache.config)
+    print('config', json.dumps(cache.config, indent=2))
     # {'architectures': ['LlamaForCausalLM'], 'bos_token_id': 1, 'eos_token_id': 2, 'hidden_act': 'silu', 'hidden_size': 3200, 'initializer_range': 0.02, 'intermediate_size': 8640, 'max_position_embeddings': 2048, 'model_type': 'llama', 'num_attention_heads': 32, 'num_hidden_layers': 26, 'pad_token_id': 0, 'rms_norm_eps': 1e-06, 'tie_word_embeddings': False, 'torch_dtype': 'float16', 'transformers_version': '4.31.0.dev0', 'use_cache': True, 'vocab_size': 32000}
     return cache.config
 
 def tokenizer_encode(cache: GlobalCache, input: str):
-    import sentencepiece
     if cache.sp is None:
         cache.sp = sentencepiece.SentencePieceProcessor()
         cache.sp.load(f'{model_path()}/tokenizer.model')
@@ -168,24 +175,20 @@ def tokenizer_encode(cache: GlobalCache, input: str):
     return [model_config(cache)['bos_token_id']] + cache.sp.encode(input)
 
 def tokenizer_decode(cache: GlobalCache, output_ids):
-    import sentencepiece
     if cache.sp is None:
         cache.sp = sentencepiece.SentencePieceProcessor()
         cache.sp.load(f'{model_path()}/tokenizer.model')
     return cache.sp.decode(output_ids)
 
 def load_safetensors(cache: GlobalCache, key):
-    import json
-    from safetensors import safe_open
     if cache.safetensors_index is None:
         with open(f'{model_path()}/model.safetensors.index.json') as f:
             cache.safetensors_index = json.loads(f.read())
     safetensor_file = cache.safetensors_index['weight_map'][key]
-    with safe_open(f'{model_path()}/{safetensor_file}', framework="pt") as f:
+    with safetensors.safe_open(f'{model_path()}/{safetensor_file}', framework="pt") as f:
         return f.get_tensor(key)
     
 def embed_tokens(cache: GlobalCache):
-    import torch
     if cache.embed_tokens is None:
         config = model_config(cache)
         cache.embed_tokens = torch.nn.Embedding(config['vocab_size'], config['hidden_size'], config['pad_token_id'])
@@ -196,15 +199,15 @@ def head_dim(cache: GlobalCache):
     if cache.head_dim is None:
         config = model_config(cache)
         cache.head_dim = config['hidden_size'] // config['num_attention_heads']
+        print('head_dim', cache.head_dim)
     return cache.head_dim
 
 def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
-    import torch
-    from torch import nn
-    import math
     bsz, q_len, _ = input_layernormed.size()
     config = model_config(cache)
     query_states = q_proj(cache, layer).forward(input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
+    if layer.index == 0:
+        print('query_states', query_states.shape) # torch.Size([1, 32, 7, 100])
     key_states = k_proj(cache, layer).forward(input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
     value_states = v_proj(cache, layer).forward(input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
     kv_seq_len = key_states.shape[-2]
@@ -225,31 +228,33 @@ def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     return attn_output
 
 def q_proj(cache: GlobalCache, layer: LayerCache):
-    from torch import nn
     if layer.q_proj is None:
         config = model_config(cache)
         layer.q_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
         layer.q_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.q_proj.weight'))
+        if layer.index == 0:
+            print('q_proj.weight.shape', layer.q_proj.weight.shape) # torch.Size([3200, 32 * 100])
     return layer.q_proj
 
 def k_proj(cache: GlobalCache, layer: LayerCache):
-    from torch import nn
     if layer.k_proj is None:
         config = model_config(cache)
         layer.k_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
         layer.k_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.k_proj.weight'))
+        if layer.index == 0:
+            print('k_proj.weight.shape', layer.k_proj.weight.shape) # torch.Size([3200, 32 * 100])
     return layer.k_proj
 
 def v_proj(cache: GlobalCache, layer: LayerCache):
-    from torch import nn
     if layer.v_proj is None:
         config = model_config(cache)
         layer.v_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
         layer.v_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.v_proj.weight'))
+        if layer.index == 0:
+            print('v_proj.weight.shape', layer.v_proj.weight.shape) # torch.Size([3200, 32 * 100])
     return layer.v_proj
 
 def o_proj(cache: GlobalCache, layer: LayerCache):
-    from torch import nn
     if layer.o_proj is None:
         config = model_config(cache)
         layer.o_proj = nn.Linear(config['num_attention_heads'] * head_dim(cache), config['hidden_size'], bias=False)
@@ -257,14 +262,12 @@ def o_proj(cache: GlobalCache, layer: LayerCache):
     return layer.o_proj
 
 def inv_freq(cache: GlobalCache):
-    import torch
     base=10000
     if cache.inv_freq is None:
         cache.inv_freq = 1.0 / (base ** (torch.arange(0, head_dim(cache), 2).float().to(cache.device) / head_dim(cache)))
     return cache.inv_freq
 
 def rotary_emb(cache: GlobalCache, seq_len, dtype):
-    import torch
     if cache.rotary_emb is None:
         t = torch.arange(model_config(cache)['max_position_embeddings'], device=cache.device, dtype=inv_freq(cache).dtype)
         freqs = torch.einsum("i,j->ij", t, inv_freq(cache))
@@ -282,7 +285,6 @@ def rotary_emb(cache: GlobalCache, seq_len, dtype):
     )
 
 def rotate_half(x):
-    import torch
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
@@ -299,11 +301,9 @@ def apply_rotary_pos_emb(q, k, cos, sin, position_ids):
     return q_embed, k_embed
 
 def position_ids_of_seq(cache:GlobalCache, seq_len):
-    import torch
     return torch.arange(0, seq_len, dtype=torch.long, device=cache.device).unsqueeze(0).view(-1, seq_len)
 
 def causal_mask_of_seq(cache: GlobalCache, seq_len: int):
-    import torch
     bsz = 1
     device = cache.device
     causal_mask = torch.full((seq_len, seq_len), torch.tensor(torch.finfo(torch.float32).min, device=device), device=device)
@@ -314,7 +314,6 @@ def causal_mask_of_seq(cache: GlobalCache, seq_len: int):
     return causal_mask
 
 def gate_proj(cache: GlobalCache, layer: LayerCache):
-    from torch import nn
     if layer.gate_proj is None:
         config = model_config(cache)
         layer.gate_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
@@ -322,7 +321,6 @@ def gate_proj(cache: GlobalCache, layer: LayerCache):
     return layer.gate_proj
 
 def down_proj(cache: GlobalCache, layer: LayerCache):
-    from torch import nn
     if layer.down_proj is None:
         config = model_config(cache)
         layer.down_proj = nn.Linear(config['intermediate_size'], config['hidden_size'], bias=False)
@@ -330,7 +328,6 @@ def down_proj(cache: GlobalCache, layer: LayerCache):
     return layer.down_proj
 
 def up_proj(cache: GlobalCache, layer: LayerCache):
-    from torch import nn
     if layer.up_proj is None:
         config = model_config(cache)
         layer.up_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
@@ -338,12 +335,9 @@ def up_proj(cache: GlobalCache, layer: LayerCache):
     return layer.up_proj
 
 def mlp(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
-    from torch import nn
     gate_projected = gate_proj(cache, layer).forward(attn_output_layernormed)
     up_projected = up_proj(cache, layer)(attn_output_layernormed)
     return down_proj(cache, layer).forward(nn.functional.silu(gate_projected) * up_projected)
 
-
-import torch
 with torch.inference_mode():
     main()
