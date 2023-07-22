@@ -1,18 +1,6 @@
 from dataclasses import dataclass
 
 @dataclass
-class GlobalCache:
-    device: any
-    safetensors_index = None
-    embed_tokens = None
-    config: any = None
-    head_dim: any = None
-    inv_freq: any = None
-    rotary_emb: any = None
-    output_layernorm_weight: any = None
-    lm_head: any = None
-
-@dataclass
 class LayerCache:
     index: int
     input_layernorm_weight: any = None
@@ -25,70 +13,81 @@ class LayerCache:
     down_proj: any = None
     up_proj: any = None
 
+@dataclass
+class GlobalCache:
+    device: any
+    layers: list[LayerCache]
+    safetensors_index = None
+    embed_tokens = None
+    config: any = None
+    head_dim: any = None
+    inv_freq: any = None
+    rotary_emb: any = None
+    output_layernorm_weight: any = None
+    lm_head: any = None
+    sp: any = None
+
 def main():
     import torch
-    cache = GlobalCache(device=torch.device('cpu'))
-    layer0 = LayerCache(index=0)
-    input_ids = torch.tensor(tokenize(cache, 'Once upon a time, '), dtype=torch.long).unsqueeze(0)
-    input_embeds = embed_tokens(cache).forward(input_ids)
-    layer_input = input_embeds
-    layer_input = decode_layer(cache, layer0, layer_input=layer_input)
-    layer1 = LayerCache(index=1)
-    layer_input = decode_layer(cache, layer1, layer_input=layer_input)
-    layer2 = LayerCache(index=2)
-    layer_input = decode_layer(cache, layer2, layer_input=layer_input)
-    layer3 = LayerCache(index=3)
-    layer_input = decode_layer(cache, layer3, layer_input=layer_input)
-    layer4 = LayerCache(index=4)
-    layer_input = decode_layer(cache, layer4, layer_input=layer_input)
-    layer5 = LayerCache(index=5)
-    layer_input = decode_layer(cache, layer5, layer_input=layer_input)
-    layer6 = LayerCache(index=6)
-    layer_input = decode_layer(cache, layer6, layer_input=layer_input)
-    layer7 = LayerCache(index=7)
-    layer_input = decode_layer(cache, layer7, layer_input=layer_input)
-    layer8 = LayerCache(index=8)
-    layer_input = decode_layer(cache, layer8, layer_input=layer_input)
-    layer9 = LayerCache(index=9)
-    layer_input = decode_layer(cache, layer9, layer_input=layer_input)
-    layer10 = LayerCache(index=10)
-    layer_input = decode_layer(cache, layer10, layer_input=layer_input)
-    layer11 = LayerCache(index=11)
-    layer_input = decode_layer(cache, layer11, layer_input=layer_input)
-    layer12 = LayerCache(index=12)
-    layer_input = decode_layer(cache, layer12, layer_input=layer_input)
-    layer13 = LayerCache(index=13)
-    layer_input = decode_layer(cache, layer13, layer_input=layer_input)
-    layer14 = LayerCache(index=14)
-    layer_input = decode_layer(cache, layer14, layer_input=layer_input)
-    layer15 = LayerCache(index=15)
-    layer_input = decode_layer(cache, layer15, layer_input=layer_input)  
-    layer16 = LayerCache(index=16)
-    layer_input = decode_layer(cache, layer16, layer_input=layer_input)
-    layer17 = LayerCache(index=17)
-    layer_input = decode_layer(cache, layer17, layer_input=layer_input)
-    layer18 = LayerCache(index=18)
-    layer_input = decode_layer(cache, layer18, layer_input=layer_input)
-    layer19 = LayerCache(index=19)
-    layer_input = decode_layer(cache, layer19, layer_input=layer_input)
-    layer20 = LayerCache(index=20)
-    layer_input = decode_layer(cache, layer20, layer_input=layer_input)
-    layer21 = LayerCache(index=21)  
-    layer_input = decode_layer(cache, layer21, layer_input=layer_input)  
-    layer22 = LayerCache(index=22)
-    layer_input = decode_layer(cache, layer22, layer_input=layer_input)
-    layer23 = LayerCache(index=23)
-    layer_input = decode_layer(cache, layer23, layer_input=layer_input)
-    layer24 = LayerCache(index=24)
-    layer_input = decode_layer(cache, layer24, layer_input=layer_input)
-    layer25 = LayerCache(index=25)
-    output = decode_layer(cache, layer25, layer_input=layer_input)
-    output_layernormed = output_layernorm(cache, output)
+    cache = GlobalCache(device=torch.device('cpu'), layers=[LayerCache(index=i) for i in range(26)])
+    input_ids = torch.tensor(tokenizer_encode(cache, 'Once upon a time, '), dtype=torch.long)
+    output_ids = decode_one_token(cache, input_ids)
+    output_ids = torch.concat([
+        output_ids,
+        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    ], dim=-1)
+    output_ids = torch.concat([
+        output_ids,
+        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    ], dim=-1)
+    output_ids = torch.concat([
+        output_ids,
+        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    ], dim=-1)
+    output_ids = torch.concat([
+        output_ids,
+        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    ], dim=-1)
+    print(tokenizer_decode(cache, output_ids.tolist()))
+
+def decode_one_token(cache: GlobalCache, input_ids):
+    # input_ids is only one sequence
+    # embed_tokens want a batch of sequence as input, so need to unsqueeze to add a dimension
+    input_embeds = embed_tokens(cache).forward(input_ids.unsqueeze(0))
+
+    layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
+    layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
+    layer2_output = decode_layer(cache, cache.layers[2], layer_input=layer1_output)
+    layer3_output = decode_layer(cache, cache.layers[3], layer_input=layer2_output)
+    layer4_output = decode_layer(cache, cache.layers[4], layer_input=layer3_output)
+    layer5_output = decode_layer(cache, cache.layers[5], layer_input=layer4_output)
+    layer6_output = decode_layer(cache, cache.layers[6], layer_input=layer5_output)
+    layer7_output = decode_layer(cache, cache.layers[7], layer_input=layer6_output)
+    layer8_output = decode_layer(cache, cache.layers[8], layer_input=layer7_output)
+    layer9_output = decode_layer(cache, cache.layers[9], layer_input=layer8_output)
+    layer10_output = decode_layer(cache, cache.layers[10], layer_input=layer9_output)
+    layer11_output = decode_layer(cache, cache.layers[11], layer_input=layer10_output)
+    layer12_output = decode_layer(cache, cache.layers[12], layer_input=layer11_output)
+    layer13_output = decode_layer(cache, cache.layers[13], layer_input=layer12_output)
+    layer14_output = decode_layer(cache, cache.layers[14], layer_input=layer13_output)
+    layer15_output = decode_layer(cache, cache.layers[15], layer_input=layer14_output)
+    layer16_output = decode_layer(cache, cache.layers[16], layer_input=layer15_output)
+    layer17_output = decode_layer(cache, cache.layers[17], layer_input=layer16_output)
+    layer18_output = decode_layer(cache, cache.layers[18], layer_input=layer17_output)
+    layer19_output = decode_layer(cache, cache.layers[19], layer_input=layer18_output)
+    layer20_output = decode_layer(cache, cache.layers[20], layer_input=layer19_output)
+    layer21_output = decode_layer(cache, cache.layers[21], layer_input=layer20_output)
+    layer22_output = decode_layer(cache, cache.layers[22], layer_input=layer21_output)
+    layer23_output = decode_layer(cache, cache.layers[23], layer_input=layer22_output)
+    layer24_output = decode_layer(cache, cache.layers[24], layer_input=layer23_output)
+    layer25_output = decode_layer(cache, cache.layers[25], layer_input=layer24_output)
+
+    output_layernormed = output_layernorm(cache, layer25_output)
     logits = lm_head(cache).forward(output_layernormed)
     next_token_logits = logits[:, -1, :]
     next_tokens = torch.argmax(next_token_logits, dim=-1)
-    print(next_tokens) # tensor([29532])
-
+    print('next_tokens', next_tokens) # tensor([29532])
+    return next_tokens
 
 def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
     input_layernormed = input_layernorm(cache, layer, layer_input)
@@ -160,12 +159,20 @@ def model_config(cache: GlobalCache):
     # {'architectures': ['LlamaForCausalLM'], 'bos_token_id': 1, 'eos_token_id': 2, 'hidden_act': 'silu', 'hidden_size': 3200, 'initializer_range': 0.02, 'intermediate_size': 8640, 'max_position_embeddings': 2048, 'model_type': 'llama', 'num_attention_heads': 32, 'num_hidden_layers': 26, 'pad_token_id': 0, 'rms_norm_eps': 1e-06, 'tie_word_embeddings': False, 'torch_dtype': 'float16', 'transformers_version': '4.31.0.dev0', 'use_cache': True, 'vocab_size': 32000}
     return cache.config
 
-def tokenize(cache: GlobalCache, input: str):
+def tokenizer_encode(cache: GlobalCache, input: str):
     import sentencepiece
-    sp = sentencepiece.SentencePieceProcessor()
-    sp.load(f'{model_path()}/tokenizer.model')
+    if cache.sp is None:
+        cache.sp = sentencepiece.SentencePieceProcessor()
+        cache.sp.load(f'{model_path()}/tokenizer.model')
     # [0, 9038, 2501, 263, 931, 29892, 29871]
-    return [model_config(cache)['bos_token_id']] + sp.encode(input)
+    return [model_config(cache)['bos_token_id']] + cache.sp.encode(input)
+
+def tokenizer_decode(cache: GlobalCache, output_ids):
+    import sentencepiece
+    if cache.sp is None:
+        cache.sp = sentencepiece.SentencePieceProcessor()
+        cache.sp.load(f'{model_path()}/tokenizer.model')
+    return cache.sp.decode(output_ids)
 
 def load_safetensors(cache: GlobalCache, key):
     import json
