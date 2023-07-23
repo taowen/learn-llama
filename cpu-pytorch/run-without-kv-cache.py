@@ -91,8 +91,13 @@ def decode_one_token(cache: GlobalCache, input_ids):
     layer25_output = decode_layer(cache, cache.layers[25], layer_input=layer24_output)
 
     output_layernormed = output_layernorm(cache, layer25_output)
-    logits = lm_head(cache).forward(output_layernormed)
-    next_tokens = torch.argmax(logits[:, -1, :], dim=-1)
+    print('output_layernormed.shape', output_layernormed.shape)
+    logits = lm_head(cache, output_layernormed)
+    print('logits.shape', logits.shape)
+    last_logit = logits[:, -1, :]
+    print('last_logit', last_logit)
+    print('last_logit.shape', last_logit.shape)
+    next_tokens = torch.argmax(last_logit, dim=-1)
     return next_tokens
 
 def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
@@ -114,12 +119,13 @@ def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
     layer_output = attn_output + layer_output
     return layer_output
 
-def lm_head(cache: GlobalCache):
+def lm_head(cache: GlobalCache, output_layernormed):
     if cache.lm_head is None:
         config = model_config(cache)
         cache.lm_head = torch.nn.Linear(config['hidden_size'], config['vocab_size'], bias=False)
         cache.lm_head.weight = torch.nn.Parameter(load_safetensors(cache, 'lm_head.weight'))
-    return cache.lm_head
+        print('lm_head.weight.shape', cache.lm_head.weight.shape)
+    return cache.lm_head.forward(output_layernormed)
 
 def input_layernorm(cache: GlobalCache, layer: LayerCache, input_embeds):
     return rms_layernorm(cache, input_layernorm_weight(cache, layer), input_embeds)
@@ -207,17 +213,19 @@ def head_dim(cache: GlobalCache):
     return cache.head_dim
 
 def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
-    bsz, q_len, _ = input_layernormed.size()
     config = model_config(cache)
+    bsz, q_len, _ = input_layernormed.size()
     query_states = q_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
     if layer.index == 0:
-        print('query_states', query_states.shape) # torch.Size([1, 32, 7, 100])
+        print('query_states.shape', query_states.shape) # torch.Size([1, 32, 7, 100])
     key_states = k_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
     value_states = v_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
     kv_seq_len = key_states.shape[-2]
     cos, sin = rotary_emb(cache, kv_seq_len, value_states.dtype)
     position_ids = position_ids_of_seq(cache, kv_seq_len)
     pos_query_states, pos_key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
+    if layer.index == 0:
+        print('pos_query_states.shape', pos_query_states.shape) # torch.Size([1, 32, 7, 100])
     attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(2, 3)) / math.sqrt(head_dim(cache))
     causal_mask = causal_mask_of_seq(cache, kv_seq_len)
     attn_weights = attn_weights + causal_mask
@@ -225,10 +233,18 @@ def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
         attn_weights, torch.tensor(torch.finfo(attn_weights.dtype).min, device=attn_weights.device)
     )
     attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(pos_query_states.dtype)
-    attn_output = torch.matmul(attn_weights, value_states)
-    attn_output = attn_output.transpose(1, 2)
-    attn_output = attn_output.reshape(bsz, q_len, config['hidden_size'])
-    attn_output = o_proj(cache, layer).forward(attn_output)
+    if layer.index == 0:
+        print('attn_weights.shape', attn_weights.shape)
+    attn_tmp_output1 = torch.matmul(attn_weights, value_states)
+    if layer.index == 0:
+        print('attn_tmp_output1.shape', attn_tmp_output1.shape)
+    attn_tmp_output2 = attn_tmp_output1.transpose(1, 2)
+    if layer.index == 0:
+        print('attn_tmp_output2.shape', attn_tmp_output2.shape)
+    attn_tmp_output3 = attn_tmp_output2.reshape(bsz, q_len, config['hidden_size'])
+    if layer.index == 0:
+        print('attn_tmp_output3.shape', attn_tmp_output3.shape)
+    attn_output = o_proj(cache, layer, attn_tmp_output3)
     return attn_output
 
 def q_proj(cache: GlobalCache, layer: LayerCache, input_layernormed):
@@ -258,12 +274,12 @@ def v_proj(cache: GlobalCache, layer: LayerCache, input_layernormed):
             print('v_proj.weight.shape', layer.v_proj.weight.shape) # torch.Size([3200, 32 * 100])
     return layer.v_proj.forward(input_layernormed)
 
-def o_proj(cache: GlobalCache, layer: LayerCache):
+def o_proj(cache: GlobalCache, layer: LayerCache, attn_tmp_output3):
     if layer.o_proj is None:
         config = model_config(cache)
         layer.o_proj = nn.Linear(config['num_attention_heads'] * head_dim(cache), config['hidden_size'], bias=False)
         layer.o_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.o_proj.weight'))
-    return layer.o_proj
+    return layer.o_proj.forward(attn_tmp_output3)
 
 def inv_freq(cache: GlobalCache):
     base=10000
