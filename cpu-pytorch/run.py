@@ -192,9 +192,10 @@ def embed_tokens(cache: GlobalCache):
     if cache.embed_tokens is None:
         config = model_config(cache)
         cache.embed_tokens = torch.nn.Embedding(
-            num_embeddings=config['vocab_size'], 
-            embedding_dim=config['hidden_size'], 
-            padding_idx=config['pad_token_id'])
+            num_embeddings=config['vocab_size'], # vocab_size=32000
+            embedding_dim=config['hidden_size'], # hidden_size=3200
+            padding_idx=config['pad_token_id'], # pad_token_id=0
+        )
         cache.embed_tokens.weight = torch.nn.Parameter(load_safetensors(cache, 'model.embed_tokens.weight'))
     return cache.embed_tokens
 
@@ -208,11 +209,11 @@ def head_dim(cache: GlobalCache):
 def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     bsz, q_len, _ = input_layernormed.size()
     config = model_config(cache)
-    query_states = q_proj(cache, layer).forward(input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
+    query_states = q_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
     if layer.index == 0:
         print('query_states', query_states.shape) # torch.Size([1, 32, 7, 100])
-    key_states = k_proj(cache, layer).forward(input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
-    value_states = v_proj(cache, layer).forward(input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
+    key_states = k_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
+    value_states = v_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
     kv_seq_len = key_states.shape[-2]
     cos, sin = rotary_emb(cache, kv_seq_len, value_states.dtype)
     position_ids = position_ids_of_seq(cache, kv_seq_len)
@@ -230,32 +231,32 @@ def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     attn_output = o_proj(cache, layer).forward(attn_output)
     return attn_output
 
-def q_proj(cache: GlobalCache, layer: LayerCache):
+def q_proj(cache: GlobalCache, layer: LayerCache, input_layernormed):
     if layer.q_proj is None:
         config = model_config(cache)
-        layer.q_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
+        layer.q_proj = nn.Linear(in_features=config['hidden_size'], out_features=config['num_attention_heads'] * head_dim(cache), bias=False)
         layer.q_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.q_proj.weight'))
         if layer.index == 0:
             print('q_proj.weight.shape', layer.q_proj.weight.shape) # torch.Size([3200, 32 * 100])
-    return layer.q_proj
+    return layer.q_proj.forward(input_layernormed)
 
-def k_proj(cache: GlobalCache, layer: LayerCache):
+def k_proj(cache: GlobalCache, layer: LayerCache, input_layernormed):
     if layer.k_proj is None:
         config = model_config(cache)
         layer.k_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
         layer.k_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.k_proj.weight'))
         if layer.index == 0:
             print('k_proj.weight.shape', layer.k_proj.weight.shape) # torch.Size([3200, 32 * 100])
-    return layer.k_proj
+    return layer.k_proj.forward(input_layernormed)
 
-def v_proj(cache: GlobalCache, layer: LayerCache):
+def v_proj(cache: GlobalCache, layer: LayerCache, input_layernormed):
     if layer.v_proj is None:
         config = model_config(cache)
         layer.v_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
         layer.v_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.v_proj.weight'))
         if layer.index == 0:
             print('v_proj.weight.shape', layer.v_proj.weight.shape) # torch.Size([3200, 32 * 100])
-    return layer.v_proj
+    return layer.v_proj.forward(input_layernormed)
 
 def o_proj(cache: GlobalCache, layer: LayerCache):
     if layer.o_proj is None:
@@ -323,12 +324,12 @@ def gate_proj(cache: GlobalCache, layer: LayerCache):
         layer.gate_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.gate_proj.weight'))
     return layer.gate_proj
 
-def down_proj(cache: GlobalCache, layer: LayerCache):
+def down_proj(cache: GlobalCache, layer: LayerCache, activation_projected):
     if layer.down_proj is None:
         config = model_config(cache)
         layer.down_proj = nn.Linear(config['intermediate_size'], config['hidden_size'], bias=False)
         layer.down_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.down_proj.weight'))
-    return layer.down_proj
+    return layer.down_proj.forward(activation_projected)
 
 def up_proj(cache: GlobalCache, layer: LayerCache):
     if layer.up_proj is None:
@@ -340,7 +341,8 @@ def up_proj(cache: GlobalCache, layer: LayerCache):
 def mlp(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
     gate_projected = gate_proj(cache, layer).forward(attn_output_layernormed)
     up_projected = up_proj(cache, layer)(attn_output_layernormed)
-    return down_proj(cache, layer).forward(nn.functional.silu(gate_projected) * up_projected)
+    activation_projected = nn.functional.silu(gate_projected) * up_projected
+    return down_proj(cache, layer, activation_projected)
 
 with torch.inference_mode():
     main()
