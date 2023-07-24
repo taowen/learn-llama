@@ -38,24 +38,24 @@ def main():
     input_ids = torch.tensor(tokenizer_encode(cache, 'Once upon a time, '), dtype=torch.long)
     print('input_ids', input_ids) # tensor([    1,  4095,  3194,   260,   632, 29522, 29500])
     output_ids = decode_one_token(cache, input_ids)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    print('output_ids', output_ids) # tensor([29532])
-    print(tokenizer_decode(cache, output_ids.tolist()))
+    # output_ids = torch.concat([
+    #     output_ids,
+    #     decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    # ], dim=-1)
+    # output_ids = torch.concat([
+    #     output_ids,
+    #     decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    # ], dim=-1)
+    # output_ids = torch.concat([
+    #     output_ids,
+    #     decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    # ], dim=-1)
+    # output_ids = torch.concat([
+    #     output_ids,
+    #     decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    # ], dim=-1)
+    # print('output_ids', output_ids) # tensor([29532])
+    # print(tokenizer_decode(cache, output_ids.tolist()))
 
 def decode_one_token(cache: GlobalCache, input_ids):
     # input_ids is only one sequence
@@ -319,32 +319,44 @@ def causal_mask_of_seq(cache: GlobalCache, seq_len: int):
     causal_mask = causal_mask[None, None, :, :].expand(bsz, 1, seq_len, seq_len)
     return causal_mask
 
-def gate_proj(cache: GlobalCache, layer: LayerCache):
+def gate_proj(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
     if layer.gate_proj is None:
         config = model_config(cache)
         layer.gate_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
         layer.gate_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.gate_proj.weight'))
-    return layer.gate_proj
+        if layer.index == 0:
+            print('gate_proj.weight.shape', layer.gate_proj.weight.shape)
+    return layer.gate_proj.forward(attn_output_layernormed)
 
 def down_proj(cache: GlobalCache, layer: LayerCache, activation_projected):
     if layer.down_proj is None:
         config = model_config(cache)
         layer.down_proj = nn.Linear(config['intermediate_size'], config['hidden_size'], bias=False)
         layer.down_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.down_proj.weight'))
+        if layer.index == 0:
+            print('down_proj.weight.shape', layer.down_proj.weight.shape)
     return layer.down_proj.forward(activation_projected)
 
-def up_proj(cache: GlobalCache, layer: LayerCache):
+def up_proj(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
     if layer.up_proj is None:
         config = model_config(cache)
         layer.up_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
         layer.up_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.up_proj.weight'))
-    return layer.up_proj
+        if layer.index == 0:
+            print('up_proj.weight.shape', layer.up_proj.weight.shape)
+    return layer.up_proj.forward(attn_output_layernormed)
 
 def mlp(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
-    gate_projected = gate_proj(cache, layer).forward(attn_output_layernormed)
-    up_projected = up_proj(cache, layer)(attn_output_layernormed)
-    activation_projected = nn.functional.silu(gate_projected) * up_projected
-    return down_proj(cache, layer, activation_projected)
+    gate_projected = gate_proj(cache, layer, attn_output_layernormed)
+    if layer.index == 0:
+        print('gate_projected.shape', gate_projected.shape)
+    up_projected = up_proj(cache, layer, attn_output_layernormed)
+    if layer.index == 0:
+        print('up_projected.shape', up_projected.shape)
+    activated = nn.functional.silu(gate_projected) * up_projected
+    if layer.index == 0:
+        print('activated.shape', activated.shape)
+    return down_proj(cache, layer, activated)
 
 with torch.inference_mode():
     main()
