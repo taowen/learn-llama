@@ -38,23 +38,23 @@ def main():
     input_ids = torch.tensor(tokenizer_encode(cache, 'Once upon a time, '), dtype=torch.long)
     print('input_ids', input_ids) # tensor([    1,  4095,  3194,   260,   632, 29522, 29500])
     output_ids = decode_one_token(cache, input_ids)
+    output_ids = torch.concat([
+        output_ids,
+        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    ], dim=-1)
+    output_ids = torch.concat([
+        output_ids,
+        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    ], dim=-1)
+    output_ids = torch.concat([
+        output_ids,
+        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    ], dim=-1)
+    output_ids = torch.concat([
+        output_ids,
+        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
+    ], dim=-1)
     print('output_ids', output_ids) # tensor([29532])
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
     print(tokenizer_decode(cache, output_ids.tolist()))
 
 def decode_one_token(cache: GlobalCache, input_ids):
