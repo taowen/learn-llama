@@ -18,6 +18,8 @@ class LayerCache:
     gate_proj: any = None
     down_proj: any = None
     up_proj: any = None
+    past_key_states: any = None
+    past_query_states: any = None
 
 @dataclass
 class GlobalCache:
@@ -37,58 +39,48 @@ def main():
     cache = GlobalCache(device=torch.device('cpu'), layers=[LayerCache(index=i) for i in range(26)])
     input_ids = torch.tensor(tokenizer_encode(cache, 'Once upon a time, '), dtype=torch.long)
     print('input_ids', input_ids) # tensor([    1,  4095,  3194,   260,   632, 29522, 29500])
-    output_ids = decode_one_token(cache, input_ids)
-    print('output_ids', output_ids) # tensor([29532])
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    output_ids = torch.concat([
-        output_ids,
-        decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
-    ], dim=-1)
-    print(tokenizer_decode(cache, output_ids.tolist()))
+    last_output_ids = decode_first_token(cache, input_ids)
+    print('output_ids', last_output_ids) # tensor([29532])
+    print('===')
+    decode_more_token(cache, last_output_ids)
 
-def decode_one_token(cache: GlobalCache, input_ids):
+
+def decode_more_token(cache:GlobalCache, last_output_ids):
+    input_embeds = embed_tokens(cache, last_output_ids.unsqueeze(0))
+    layer0_output = decode_more_token_layer(cache, cache.layers[0], layer_input=input_embeds)
+
+def decode_first_token(cache: GlobalCache, input_ids):
     # input_ids is only one sequence
     # embed_tokens want a batch of sequence as input, so need to unsqueeze to add a dimension
     print('input_ids.shape', input_ids.shape) # torch.Size([7])
     input_embeds = embed_tokens(cache, input_ids.unsqueeze(0))
     print('input_embeds.shape', input_embeds.shape) # torch.Size([1, 7, 3200])
-    layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
-    layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
-    layer2_output = decode_layer(cache, cache.layers[2], layer_input=layer1_output)
-    layer3_output = decode_layer(cache, cache.layers[3], layer_input=layer2_output)
-    layer4_output = decode_layer(cache, cache.layers[4], layer_input=layer3_output)
-    layer5_output = decode_layer(cache, cache.layers[5], layer_input=layer4_output)
-    layer6_output = decode_layer(cache, cache.layers[6], layer_input=layer5_output)
-    layer7_output = decode_layer(cache, cache.layers[7], layer_input=layer6_output)
-    layer8_output = decode_layer(cache, cache.layers[8], layer_input=layer7_output)
-    layer9_output = decode_layer(cache, cache.layers[9], layer_input=layer8_output)
-    layer10_output = decode_layer(cache, cache.layers[10], layer_input=layer9_output)
-    layer11_output = decode_layer(cache, cache.layers[11], layer_input=layer10_output)
-    layer12_output = decode_layer(cache, cache.layers[12], layer_input=layer11_output)
-    layer13_output = decode_layer(cache, cache.layers[13], layer_input=layer12_output)
-    layer14_output = decode_layer(cache, cache.layers[14], layer_input=layer13_output)
-    layer15_output = decode_layer(cache, cache.layers[15], layer_input=layer14_output)
-    layer16_output = decode_layer(cache, cache.layers[16], layer_input=layer15_output)
-    layer17_output = decode_layer(cache, cache.layers[17], layer_input=layer16_output)
-    layer18_output = decode_layer(cache, cache.layers[18], layer_input=layer17_output)
-    layer19_output = decode_layer(cache, cache.layers[19], layer_input=layer18_output)
-    layer20_output = decode_layer(cache, cache.layers[20], layer_input=layer19_output)
-    layer21_output = decode_layer(cache, cache.layers[21], layer_input=layer20_output)
-    layer22_output = decode_layer(cache, cache.layers[22], layer_input=layer21_output)
-    layer23_output = decode_layer(cache, cache.layers[23], layer_input=layer22_output)
-    layer24_output = decode_layer(cache, cache.layers[24], layer_input=layer23_output)
-    layer25_output = decode_layer(cache, cache.layers[25], layer_input=layer24_output)
+    layer0_output = decode_first_token_layer(cache, cache.layers[0], layer_input=input_embeds)
+    layer1_output = decode_first_token_layer(cache, cache.layers[1], layer_input=layer0_output)
+    layer2_output = decode_first_token_layer(cache, cache.layers[2], layer_input=layer1_output)
+    layer3_output = decode_first_token_layer(cache, cache.layers[3], layer_input=layer2_output)
+    layer4_output = decode_first_token_layer(cache, cache.layers[4], layer_input=layer3_output)
+    layer5_output = decode_first_token_layer(cache, cache.layers[5], layer_input=layer4_output)
+    layer6_output = decode_first_token_layer(cache, cache.layers[6], layer_input=layer5_output)
+    layer7_output = decode_first_token_layer(cache, cache.layers[7], layer_input=layer6_output)
+    layer8_output = decode_first_token_layer(cache, cache.layers[8], layer_input=layer7_output)
+    layer9_output = decode_first_token_layer(cache, cache.layers[9], layer_input=layer8_output)
+    layer10_output = decode_first_token_layer(cache, cache.layers[10], layer_input=layer9_output)
+    layer11_output = decode_first_token_layer(cache, cache.layers[11], layer_input=layer10_output)
+    layer12_output = decode_first_token_layer(cache, cache.layers[12], layer_input=layer11_output)
+    layer13_output = decode_first_token_layer(cache, cache.layers[13], layer_input=layer12_output)
+    layer14_output = decode_first_token_layer(cache, cache.layers[14], layer_input=layer13_output)
+    layer15_output = decode_first_token_layer(cache, cache.layers[15], layer_input=layer14_output)
+    layer16_output = decode_first_token_layer(cache, cache.layers[16], layer_input=layer15_output)
+    layer17_output = decode_first_token_layer(cache, cache.layers[17], layer_input=layer16_output)
+    layer18_output = decode_first_token_layer(cache, cache.layers[18], layer_input=layer17_output)
+    layer19_output = decode_first_token_layer(cache, cache.layers[19], layer_input=layer18_output)
+    layer20_output = decode_first_token_layer(cache, cache.layers[20], layer_input=layer19_output)
+    layer21_output = decode_first_token_layer(cache, cache.layers[21], layer_input=layer20_output)
+    layer22_output = decode_first_token_layer(cache, cache.layers[22], layer_input=layer21_output)
+    layer23_output = decode_first_token_layer(cache, cache.layers[23], layer_input=layer22_output)
+    layer24_output = decode_first_token_layer(cache, cache.layers[24], layer_input=layer23_output)
+    layer25_output = decode_first_token_layer(cache, cache.layers[25], layer_input=layer24_output)
 
     output_layernormed = output_layernorm(cache, layer25_output)
     print('output_layernormed.shape', output_layernormed.shape)
@@ -100,11 +92,28 @@ def decode_one_token(cache: GlobalCache, input_ids):
     next_tokens = torch.argmax(last_logit, dim=-1)
     return next_tokens
 
-def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
+def decode_more_token_layer(cache: GlobalCache, layer: LayerCache, layer_input):
+    input_layernormed = input_layernorm(cache, layer, layer_input)
+    attn_output = self_attn_more_token(cache, layer, input_layernormed) 
+    if layer.index == 0:
+        print('attn_output.shape', attn_output.shape) # torch.Size([1, 7, 3200])
+    # input_embeds is residual
+    attn_output = layer_input + attn_output
+    attn_output_layernormed = post_attention_layernorm(cache, layer, attn_output)
+    if layer.index == 0:
+        print('attn_output_layernormed.shape', attn_output_layernormed.shape) # torch.Size([1, 7, 3200])
+    layer_output = mlp(cache, layer, attn_output_layernormed)
+    if layer.index == 0:
+        print('layer_output.shape', layer_output.shape) # torch.Size([1, 7, 3200])
+    # attn_output is residual
+    layer_output = attn_output + layer_output
+    return layer_output
+
+def decode_first_token_layer(cache: GlobalCache, layer: LayerCache, layer_input):
     input_layernormed = input_layernorm(cache, layer, layer_input)
     if layer.index == 0:
         print('input_layernormed.shape', input_layernormed.shape) # torch.Size([1, 7, 3200])
-    attn_output = self_attn(cache, layer, input_layernormed) 
+    attn_output = self_attn_first_token(cache, layer, input_layernormed) 
     if layer.index == 0:
         print('attn_output.shape', attn_output.shape) # torch.Size([1, 7, 3200])
     # input_embeds is residual
@@ -212,7 +221,41 @@ def head_dim(cache: GlobalCache):
         print('head_dim', cache.head_dim)
     return cache.head_dim
 
-def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
+def self_attn_more_token(cache: GlobalCache, layer: LayerCache, input_layernormed):
+    config = model_config(cache)
+    bsz, q_len, _ = input_layernormed.size()
+    query_states = q_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
+    key_states = k_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
+    value_states = v_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
+    kv_seq_len = layer.past_key_states.shape[-2] + q_len
+    print(kv_seq_len)
+    cos, sin = rotary_emb(cache, kv_seq_len, value_states.dtype)
+    position_ids = position_ids_of_seq(cache, kv_seq_len)
+    pos_query_states, pos_key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
+    if layer.index == 0:
+        print('pos_query_states.shape', pos_query_states.shape) # torch.Size([1, 32, 7, 100])
+    attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(2, 3)) / math.sqrt(head_dim(cache))
+    causal_mask = causal_mask_of_seq(cache, kv_seq_len)
+    attn_weights = attn_weights + causal_mask
+    attn_weights = torch.max(
+        attn_weights, torch.tensor(torch.finfo(attn_weights.dtype).min, device=attn_weights.device)
+    )
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(pos_query_states.dtype)
+    if layer.index == 0:
+        print('attn_weights.shape', attn_weights.shape)
+    attn_tmp_output1 = torch.matmul(attn_weights, value_states)
+    if layer.index == 0:
+        print('attn_tmp_output1.shape', attn_tmp_output1.shape)
+    attn_tmp_output2 = attn_tmp_output1.transpose(1, 2)
+    if layer.index == 0:
+        print('attn_tmp_output2.shape', attn_tmp_output2.shape)
+    attn_tmp_output3 = attn_tmp_output2.reshape(bsz, q_len, config['hidden_size'])
+    if layer.index == 0:
+        print('attn_tmp_output3.shape', attn_tmp_output3.shape)
+    attn_output = o_proj(cache, layer, attn_tmp_output3)
+    return attn_output
+
+def self_attn_first_token(cache: GlobalCache, layer: LayerCache, input_layernormed):
     config = model_config(cache)
     bsz, q_len, _ = input_layernormed.size()
     query_states = q_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
@@ -221,8 +264,11 @@ def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     key_states = k_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
     value_states = v_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
     kv_seq_len = key_states.shape[-2]
-    pos_query_states = apply_rotary_pos_emb(cache, query_states)
-    pos_key_states = apply_rotary_pos_emb(cache, key_states)
+    cos, sin = rotary_emb(cache, kv_seq_len, value_states.dtype)
+    position_ids = position_ids_of_seq(cache, kv_seq_len)
+    pos_query_states, pos_key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
+    layer.past_query_states = pos_query_states
+    layer.past_key_states = pos_key_states
     if layer.index == 0:
         print('pos_query_states.shape', pos_query_states.shape) # torch.Size([1, 32, 7, 100])
     attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(2, 3)) / math.sqrt(head_dim(cache))
@@ -286,28 +332,41 @@ def inv_freq(cache: GlobalCache):
         cache.inv_freq = 1.0 / (base ** (torch.arange(0, head_dim(cache), 2).float().to(cache.device) / head_dim(cache)))
     return cache.inv_freq
 
+def rotary_emb(cache: GlobalCache, seq_len, dtype):
+    if cache.rotary_emb is None:
+        t = torch.arange(model_config(cache)['max_position_embeddings'], device=cache.device, dtype=inv_freq(cache).dtype)
+        freqs = torch.einsum("i,j->ij", t, inv_freq(cache))
+        emb = torch.cat((freqs, freqs), dim=-1)
+        cache.rotary_emb = (
+            emb.cos()[None, None, :, :],
+            emb.sin()[None, None, :, :]
+        )
+    cos_cached, sin_cached = cache.rotary_emb
+    if seq_len > model_config(cache)['max_position_embeddings']:
+        raise Exception('seq len is longer than max_position_embeddings')
+    return (
+        cos_cached[:, :, :seq_len, :].to(dtype=dtype),
+        sin_cached[:, :, :seq_len, :].to(dtype=dtype),
+    )
+
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
     x2 = x[..., x.shape[-1] // 2 :]
     return torch.cat((-x2, x1), dim=-1)
 
-def apply_rotary_pos_emb(cache: GlobalCache, states):
-    if cache.rotary_emb is None:
-        t = torch.arange(model_config(cache)['max_position_embeddings'], device=cache.device, dtype=inv_freq(cache).dtype)
-        freqs = torch.einsum("i,j->ij", t, inv_freq(cache))
-        emb = torch.cat((freqs, freqs), dim=-1)
-        cache.rotary_emb = (
-            emb.cos(),
-            emb.sin()
-        )
-    cos_cached, sin_cached = cache.rotary_emb
-    seq_len = states.shape[2]
-    position_ids = torch.arange(0, seq_len, dtype=torch.long, device=cache.device).unsqueeze(0).view(-1, seq_len)
-    cos = cos_cached[position_ids].unsqueeze(1)  # [bs, 1, seq_len, dim]
-    sin = sin_cached[position_ids].unsqueeze(1)  # [bs, 1, seq_len, dim]
-    states_embed = (states * cos) + (rotate_half(states) * sin)
-    return states_embed
+def apply_rotary_pos_emb(q, k, cos, sin, position_ids):
+    # The first two dimensions of cos and sin are always 1, so we can `squeeze` them.
+    cos = cos.squeeze(1).squeeze(0)  # [seq_len, dim]
+    sin = sin.squeeze(1).squeeze(0)  # [seq_len, dim]
+    cos = cos[position_ids].unsqueeze(1)  # [bs, 1, seq_len, dim]
+    sin = sin[position_ids].unsqueeze(1)  # [bs, 1, seq_len, dim]
+    q_embed = (q * cos) + (rotate_half(q) * sin)
+    k_embed = (k * cos) + (rotate_half(k) * sin)
+    return q_embed, k_embed
+
+def position_ids_of_seq(cache:GlobalCache, seq_len):
+    return torch.arange(0, seq_len, dtype=torch.long, device=cache.device).unsqueeze(0).view(-1, seq_len)
 
 def causal_mask_of_seq(cache: GlobalCache, seq_len: int):
     bsz = 1
