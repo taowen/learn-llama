@@ -37,6 +37,7 @@ def main():
     cache = GlobalCache(device=torch.device('cpu'), layers=[LayerCache(index=i) for i in range(26)])
     input_ids = torch.tensor(tokenizer_encode(cache, 'Once upon a time, '), dtype=torch.long)
     print('input_ids', input_ids) # tensor([    1,  4095,  3194,   260,   632, 29522, 29500])
+    print('input_ids.shape', input_ids.shape) # torch.Size([7])
     output_ids = decode_one_token(cache, input_ids)
     print(output_ids)
     output_ids = torch.concat([
@@ -61,8 +62,8 @@ def main():
 def decode_one_token(cache: GlobalCache, input_ids):
     # input_ids is only one sequence
     # embed_tokens want a batch of sequence as input, so need to unsqueeze to add a dimension
-    print('input_ids.shape', input_ids.shape) # torch.Size([7])
     input_embeds = embed_tokens(cache, input_ids)
+    print('input_embeds', input_embeds)
     print('input_embeds.shape', input_embeds.shape) # torch.Size([1, 7, 3200])
     layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
     layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
@@ -104,6 +105,7 @@ def decode_one_token(cache: GlobalCache, input_ids):
 def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
     input_layernormed = input_layernorm(cache, layer, layer_input)
     if layer.index == 0:
+        print('input_layernormed', input_layernormed)
         print('input_layernormed.shape', input_layernormed.shape) # torch.Size([1, 7, 3200])
     attn_output = self_attn(cache, layer, input_layernormed) 
     if layer.index == 0:
@@ -178,7 +180,6 @@ def tokenizer_encode(cache: GlobalCache, input: str):
     if cache.sp is None:
         cache.sp = sentencepiece.SentencePieceProcessor()
         cache.sp.load(f'{model_path()}/tokenizer.model')
-    # [0, 9038, 2501, 263, 931, 29892, 29871]
     return [model_config(cache)['bos_token_id']] + cache.sp.encode(input)
 
 def tokenizer_decode(cache: GlobalCache, output_ids):
@@ -221,18 +222,16 @@ def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
         print('query_states.shape', query_states.shape) # torch.Size([1, 32, 7, 100])
     key_states = k_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
     value_states = v_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
-    kv_seq_len = q_len
     pos_query_states = apply_rotary_pos_emb(cache, query_states)
     pos_key_states = apply_rotary_pos_emb(cache, key_states)
     if layer.index == 0:
         print('pos_query_states.shape', pos_query_states.shape) # torch.Size([1, 32, 7, 100])
-    attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(1, 2)) / math.sqrt(head_dim(cache))
-    causal_mask = causal_mask_of_seq(cache, kv_seq_len)
-    attn_weights = attn_weights + causal_mask
-    attn_weights = torch.max(
-        attn_weights, torch.tensor(torch.finfo(attn_weights.dtype).min, device=attn_weights.device)
+    unmasked_attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(1, 2)) / math.sqrt(head_dim(cache))
+    causal_mask = causal_mask_of_seq(cache, q_len)
+    masked_attn_weights = torch.max(
+        unmasked_attn_weights + causal_mask, torch.tensor(torch.finfo(unmasked_attn_weights.dtype).min)
     )
-    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(pos_query_states.dtype)
+    attn_weights = nn.functional.softmax(masked_attn_weights, dim=-1, dtype=torch.float32).to(pos_query_states.dtype)
     if layer.index == 0:
         print('attn_weights.shape', attn_weights.shape)
     attn_tmp_output1 = torch.matmul(attn_weights, value_states)
