@@ -84,7 +84,7 @@ hidden_size 是设计模型的时候，用来控制模型参数个数的设计�
 # 调用 26 次 decode_layer
 
 ```python
- layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
+layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
 layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
 layer2_output = decode_layer(cache, cache.layers[2], layer_input=layer1_output)
 layer3_output = decode_layer(cache, cache.layers[3], layer_input=layer2_output)
@@ -215,3 +215,9 @@ def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
 输出的 attn_output 其 shape 是 [7, 3200]，也就是 [序列token个数, hidden_size]
 
 self_attn 就是一个极其复杂的变换过程，把 input_layernormed 自己和自己进行一系列权重计算得到输出。
+
+
+```mermaid
+graph TD;
+    A[This is an <b>important</b> <a href='https://google.com'>link</a>];
+```
