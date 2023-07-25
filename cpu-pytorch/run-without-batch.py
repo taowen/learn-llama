@@ -38,6 +38,7 @@ def main():
     input_ids = torch.tensor(tokenizer_encode(cache, 'Once upon a time, '), dtype=torch.long)
     print('input_ids', input_ids) # tensor([    1,  4095,  3194,   260,   632, 29522, 29500])
     output_ids = decode_one_token(cache, input_ids)
+    print(output_ids)
     output_ids = torch.concat([
         output_ids,
         decode_one_token(cache, torch.cat([input_ids, output_ids], dim=-1))
@@ -61,7 +62,7 @@ def decode_one_token(cache: GlobalCache, input_ids):
     # input_ids is only one sequence
     # embed_tokens want a batch of sequence as input, so need to unsqueeze to add a dimension
     print('input_ids.shape', input_ids.shape) # torch.Size([7])
-    input_embeds = embed_tokens(cache, input_ids.unsqueeze(0))
+    input_embeds = embed_tokens(cache, input_ids)
     print('input_embeds.shape', input_embeds.shape) # torch.Size([1, 7, 3200])
     layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
     layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
@@ -94,10 +95,10 @@ def decode_one_token(cache: GlobalCache, input_ids):
     print('output_layernormed.shape', output_layernormed.shape)
     logits = lm_head(cache, output_layernormed)
     print('logits.shape', logits.shape)
-    last_logit = logits[:, -1, :]
+    last_logit = logits[-1, :]
     print('last_logit', last_logit)
     print('last_logit.shape', last_logit.shape)
-    next_tokens = torch.argmax(last_logit, dim=-1)
+    next_tokens = torch.argmax(last_logit, dim=-1).unsqueeze(0)
     return next_tokens
 
 def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
@@ -214,18 +215,18 @@ def head_dim(cache: GlobalCache):
 
 def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     config = model_config(cache)
-    bsz, q_len, _ = input_layernormed.size()
-    query_states = q_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
+    q_len, _ = input_layernormed.size()
+    query_states = q_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
     if layer.index == 0:
         print('query_states.shape', query_states.shape) # torch.Size([1, 32, 7, 100])
-    key_states = k_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
-    value_states = v_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
-    kv_seq_len = key_states.shape[-2]
+    key_states = k_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    value_states = v_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    kv_seq_len = q_len
     pos_query_states = apply_rotary_pos_emb(cache, query_states)
     pos_key_states = apply_rotary_pos_emb(cache, key_states)
     if layer.index == 0:
         print('pos_query_states.shape', pos_query_states.shape) # torch.Size([1, 32, 7, 100])
-    attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(2, 3)) / math.sqrt(head_dim(cache))
+    attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(1, 2)) / math.sqrt(head_dim(cache))
     causal_mask = causal_mask_of_seq(cache, kv_seq_len)
     attn_weights = attn_weights + causal_mask
     attn_weights = torch.max(
@@ -237,10 +238,10 @@ def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     attn_tmp_output1 = torch.matmul(attn_weights, value_states)
     if layer.index == 0:
         print('attn_tmp_output1.shape', attn_tmp_output1.shape)
-    attn_tmp_output2 = attn_tmp_output1.transpose(1, 2)
+    attn_tmp_output2 = attn_tmp_output1.transpose(0, 1)
     if layer.index == 0:
         print('attn_tmp_output2.shape', attn_tmp_output2.shape)
-    attn_tmp_output3 = attn_tmp_output2.reshape(bsz, q_len, config['hidden_size'])
+    attn_tmp_output3 = attn_tmp_output2.reshape(q_len, config['hidden_size'])
     if layer.index == 0:
         print('attn_tmp_output3.shape', attn_tmp_output3.shape)
     attn_output = o_proj(cache, layer, attn_tmp_output3)
@@ -302,21 +303,20 @@ def apply_rotary_pos_emb(cache: GlobalCache, states):
             emb.sin()
         )
     cos_cached, sin_cached = cache.rotary_emb
-    seq_len = states.shape[2]
-    position_ids = torch.arange(0, seq_len, dtype=torch.long, device=cache.device).unsqueeze(0).view(-1, seq_len)
-    cos = cos_cached[position_ids].unsqueeze(1)  # [bs, 1, seq_len, dim]
-    sin = sin_cached[position_ids].unsqueeze(1)  # [bs, 1, seq_len, dim]
+    seq_len = states.shape[1]
+    position_ids = torch.arange(0, seq_len, dtype=torch.long, device=cache.device)
+    cos = cos_cached[position_ids] # [seq_len, dim]
+    sin = sin_cached[position_ids] # [seq_len, dim]
     states_embed = (states * cos) + (rotate_half(states) * sin)
     return states_embed
 
 def causal_mask_of_seq(cache: GlobalCache, seq_len: int):
-    bsz = 1
     device = cache.device
     causal_mask = torch.full((seq_len, seq_len), torch.tensor(torch.finfo(torch.float32).min, device=device), device=device)
     mask_cond = torch.arange(causal_mask.size(-1), device=device)
     causal_mask.masked_fill_(mask_cond < (mask_cond + 1).view(causal_mask.size(-1), 1), 0)
     causal_mask = causal_mask.to(torch.float32)
-    causal_mask = causal_mask[None, None, :, :].expand(bsz, 1, seq_len, seq_len)
+    causal_mask = causal_mask[None, :, :].expand(1, seq_len, seq_len)
     return causal_mask
 
 def gate_proj(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
