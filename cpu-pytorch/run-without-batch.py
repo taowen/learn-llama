@@ -56,11 +56,18 @@ def log_tensor(all_values, name, description, inputs):
     for input in inputs:
         mermaid_lines.append(f'{input}-->{name}')
     shape = ', '.join(map(str, value.shape))
-    mermaid_lines.append(f'{name}[{name}<br/>{shape}<br/>{", ".join(description)}]')
+    error = ''
+    if len(value.shape) != len(description):
+        error = '!!! shape 描述错误'
+    mermaid_lines.append(f'{name}[{name}{error}<br/>{shape}<br/>{", ".join(description)}]')
     with open(f'{log_dir()}/{name}.txt', 'w') as f:
         f.write(shape)
         f.write('\n')
         f.write(str(value))
+
+def log_mermaid_line(line):
+    if line not in mermaid_lines:
+        mermaid_lines.append(line)
 
 def main():
     cache = GlobalCache(device=torch.device('cpu'), layers=[LayerCache(index=i) for i in range(26)])
@@ -130,15 +137,16 @@ def decode_one_token(cache: GlobalCache, input_ids):
     layer23_output = decode_layer(cache, cache.layers[23], layer_input=layer22_output)
     layer24_output = decode_layer(cache, cache.layers[24], layer_input=layer23_output)
     layer25_output = decode_layer(cache, cache.layers[25], layer_input=layer24_output)
+    log_mermaid_line('layer_output --循环26次--> input_embeds')
 
     output_layernormed = output_layernorm(cache, layer25_output)
-    print('output_layernormed.shape', output_layernormed.shape)
+    log_tensor(locals(), 'output_layernormed', ['token序列的长度','模型 hidden size'], ['layer_output'])
     logits = lm_head(cache, output_layernormed)
-    print('logits.shape', logits.shape)
+    log_tensor(locals(), 'logits', ['token序列的长度','字典大小'], ['output_layernormed', 'lm_head_weight'])
     last_logit = logits[-1, :]
-    print('last_logit', last_logit)
-    print('last_logit.shape', last_logit.shape)
+    log_tensor(locals(), 'last_logit', ['字典大小'], ['logits'])
     next_tokens = torch.argmax(last_logit, dim=-1).unsqueeze(0)
+    log_tensor(locals(), 'next_tokens', ['一维数组'], ['last_logit'])
     return next_tokens
 
 def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
@@ -147,26 +155,24 @@ def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
                ['token序列的长度','模型 hidden size'], 
                ['input_embeds'])
     attn_output = self_attn(cache, layer, input_layernormed) 
-    if layer.index == 0:
-        print('attn_output.shape', attn_output.shape) # torch.Size([1, 7, 3200])
     # input_embeds is residual
     attn_output = layer_input + attn_output
+    log_tensor(locals(), 'attn_output', ['token序列的长度', '模型 hidden size'], ['input_layernormed', 'attn_tmp_output3', 'o_proj_weight'])
     attn_output_layernormed = post_attention_layernorm(cache, layer, attn_output)
-    if layer.index == 0:
-        print('attn_output_layernormed.shape', attn_output_layernormed.shape) # torch.Size([1, 7, 3200])
+    log_tensor(locals(), 'attn_output_layernormed', ['token序列的长度','模型 hidden size'], ['attn_output'])
     layer_output = mlp(cache, layer, attn_output_layernormed)
-    if layer.index == 0:
-        print('layer_output.shape', layer_output.shape) # torch.Size([1, 7, 3200])
     # attn_output is residual
     layer_output = attn_output + layer_output
+    log_tensor(locals(), 'layer_output', ['token序列的长度','模型 hidden size'], ['attn_output', 'activated', 'down_proj_weight'])
     return layer_output
 
 def lm_head(cache: GlobalCache, output_layernormed):
     if cache.lm_head is None:
         config = model_config(cache)
         cache.lm_head = torch.nn.Linear(config['hidden_size'], config['vocab_size'], bias=False)
-        cache.lm_head.weight = torch.nn.Parameter(load_safetensors(cache, 'lm_head.weight'))
-        print('lm_head.weight.shape', cache.lm_head.weight.shape)
+        lm_head_weight = load_safetensors(cache, 'lm_head.weight')
+        cache.lm_head.weight = torch.nn.Parameter(lm_head_weight)
+        log_tensor(locals(), 'lm_head_weight', ['模型 hidden size', '字典大小'], [])
     return cache.lm_head.forward(output_layernormed)
 
 def input_layernorm(cache: GlobalCache, layer: LayerCache, input_embeds):
@@ -271,26 +277,25 @@ def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
                ['头的个数', 'token序列的长度', '每头 hidden size'],
                ['input_layernormed', 'v_proj_weight'])
     pos_query_states = apply_rotary_pos_emb(cache, query_states)
+    log_tensor(locals(), 'pos_query_states', ['头的个数', 'token序列的长度', '每头 hidden size'], ['query_states', 'cos_cached', 'sin_cached', 'position_ids'])
     pos_key_states = apply_rotary_pos_emb(cache, key_states)
-    if layer.index == 0:
-        print('pos_query_states.shape', pos_query_states.shape) # torch.Size([1, 32, 7, 100])
+    log_tensor(locals(), 'pos_key_states', ['头的个数', 'token序列的长度', '每头 hidden size'], ['key_states', 'cos_cached', 'sin_cached', 'position_ids'])
     unmasked_attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(1, 2)) / math.sqrt(head_dim(cache))
+    log_tensor(locals(), 'unmasked_attn_weights', ['头的个数', 'token序列的长度', 'token序列的长度'], ['pos_query_states', 'pos_key_states'])
     causal_mask = causal_mask_of_seq(cache, q_len)
+    log_tensor(locals(), 'causal_mask', ['固定为1,表示对所有的头使用相同的mask', 'token序列的长度', 'token序列的长度'], [])
     masked_attn_weights = torch.max(
         unmasked_attn_weights + causal_mask, torch.tensor(torch.finfo(unmasked_attn_weights.dtype).min)
     )
+    log_tensor(locals(), 'masked_attn_weights', ['头的个数', 'token序列的长度', 'token序列的长度'], ['unmasked_attn_weights', 'causal_mask'])
     attn_weights = nn.functional.softmax(masked_attn_weights, dim=-1, dtype=torch.float32).to(pos_query_states.dtype)
-    if layer.index == 0:
-        print('attn_weights.shape', attn_weights.shape)
+    log_tensor(locals(), 'attn_weights', ['头的个数', 'token序列的长度', 'token序列的长度'], ['masked_attn_weights'])
     attn_tmp_output1 = torch.matmul(attn_weights, value_states)
-    if layer.index == 0:
-        print('attn_tmp_output1.shape', attn_tmp_output1.shape)
+    log_tensor(locals(), 'attn_tmp_output1', ['头的个数', 'token序列的长度', '每头 hidden size'], ['attn_weights', 'value_states'])
     attn_tmp_output2 = attn_tmp_output1.transpose(0, 1)
-    if layer.index == 0:
-        print('attn_tmp_output2.shape', attn_tmp_output2.shape)
+    log_tensor(locals(), 'attn_tmp_output2', ['token序列的长度', '头的个数', '每头 hidden size'], ['attn_tmp_output1'])
     attn_tmp_output3 = attn_tmp_output2.reshape(q_len, config['hidden_size'])
-    if layer.index == 0:
-        print('attn_tmp_output3.shape', attn_tmp_output3.shape)
+    log_tensor(locals(), 'attn_tmp_output3', ['token序列的长度', '模型 hidden size'], ['attn_tmp_output2'])
     attn_output = o_proj(cache, layer, attn_tmp_output3)
     return attn_output
 
@@ -331,7 +336,11 @@ def o_proj(cache: GlobalCache, layer: LayerCache, attn_tmp_output3):
     if layer.o_proj is None:
         config = model_config(cache)
         layer.o_proj = nn.Linear(config['num_attention_heads'] * head_dim(cache), config['hidden_size'], bias=False)
-        layer.o_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.o_proj.weight'))
+        o_proj_weight = load_safetensors(cache, f'model.layers.{layer.index}.self_attn.o_proj.weight')
+        layer.o_proj.weight = nn.Parameter(o_proj_weight)
+        log_tensor(locals(), 'o_proj_weight', 
+                   ['头个数 * 每头 hidden size', '模型 hidden size'],
+                   [])
     return layer.o_proj.forward(attn_tmp_output3)
 
 def inv_freq(cache: GlobalCache):
@@ -356,10 +365,13 @@ def apply_rotary_pos_emb(cache: GlobalCache, states):
             emb.sin()
         )
     cos_cached, sin_cached = cache.rotary_emb
+    log_tensor(locals(), 'cos_cached', ['最大的序列长度', 'cos 表'], [])
+    log_tensor(locals(), 'sin_cached', ['最大的序列长度', 'sin 表'], [])
     seq_len = states.shape[1]
     position_ids = torch.arange(0, seq_len, dtype=torch.long, device=cache.device)
-    cos = cos_cached[position_ids] # [seq_len, dim]
-    sin = sin_cached[position_ids] # [seq_len, dim]
+    log_tensor(locals(), 'position_ids', ['token序列的长度'], [])
+    cos = cos_cached[position_ids]
+    sin = sin_cached[position_ids]
     states_embed = (states * cos) + (rotate_half(states) * sin)
     return states_embed
 
@@ -376,39 +388,36 @@ def gate_proj(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
     if layer.gate_proj is None:
         config = model_config(cache)
         layer.gate_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
-        layer.gate_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.gate_proj.weight'))
-        if layer.index == 0:
-            print('gate_proj.weight.shape', layer.gate_proj.weight.shape)
+        gate_proj_weight = load_safetensors(cache, f'model.layers.{layer.index}.mlp.gate_proj.weight')
+        layer.gate_proj.weight = nn.Parameter(gate_proj_weight)
+        log_tensor(locals(), 'gate_proj_weight', ['intermediate size', '模型 hidden size'], [])
     return layer.gate_proj.forward(attn_output_layernormed)
 
 def down_proj(cache: GlobalCache, layer: LayerCache, activation_projected):
     if layer.down_proj is None:
         config = model_config(cache)
         layer.down_proj = nn.Linear(config['intermediate_size'], config['hidden_size'], bias=False)
-        layer.down_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.down_proj.weight'))
-        if layer.index == 0:
-            print('down_proj.weight.shape', layer.down_proj.weight.shape)
+        down_proj_weight = load_safetensors(cache, f'model.layers.{layer.index}.mlp.down_proj.weight')
+        layer.down_proj.weight = nn.Parameter(down_proj_weight)
+        log_tensor(locals(), 'down_proj_weight', ['模型 hidden size', 'intermediate size'], [])
     return layer.down_proj.forward(activation_projected)
 
 def up_proj(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
     if layer.up_proj is None:
         config = model_config(cache)
         layer.up_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
-        layer.up_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.up_proj.weight'))
-        if layer.index == 0:
-            print('up_proj.weight.shape', layer.up_proj.weight.shape)
+        up_proj_weight = load_safetensors(cache, f'model.layers.{layer.index}.mlp.up_proj.weight')
+        layer.up_proj.weight = nn.Parameter(up_proj_weight)
+        log_tensor(locals(), 'up_proj_weight', ['intermediate size', '模型 hidden size'], [])
     return layer.up_proj.forward(attn_output_layernormed)
 
 def mlp(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
     gate_projected = gate_proj(cache, layer, attn_output_layernormed)
-    if layer.index == 0:
-        print('gate_projected.shape', gate_projected.shape)
+    log_tensor(locals(), 'gate_projected', ['token序列的长度', 'intermediate size'], ['gate_proj_weight', 'attn_output_layernormed'])
     up_projected = up_proj(cache, layer, attn_output_layernormed)
-    if layer.index == 0:
-        print('up_projected.shape', up_projected.shape)
+    log_tensor(locals(), 'up_projected', ['token序列的长度', 'intermediate size'], ['up_proj_weight', 'attn_output_layernormed'])
     activated = nn.functional.silu(gate_projected) * up_projected
-    if layer.index == 0:
-        print('activated.shape', activated.shape)
+    log_tensor(locals(), 'activated', ['token序列的长度', 'intermediate size'], ['gate_projected', 'up_projected'])
     return down_proj(cache, layer, activated)
 
 with torch.inference_mode():
