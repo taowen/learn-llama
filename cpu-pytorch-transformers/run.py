@@ -10,7 +10,6 @@ generated = model.generate(input_ids, max_length=50, generation_config=Generatio
 generated_tokens = generated[:, input_ids.shape[-1]:] # slice to get generated tokens
 print(generated_tokens)
 
-# The generate() method on the LLaMAForCausalLM model returns a 2D tensor of shape (batch_size, sequence_length).
 decoded = tokenizer.decode(generated_tokens[0])
 print(decoded)
 

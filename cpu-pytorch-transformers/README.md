@@ -1,0 +1,1 @@
+先用 weights/download.sh 下载原始的模型权重，然后用 convert-to-safetensors.py 转换成 safetensors 格式序列化的版本
