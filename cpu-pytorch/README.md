@@ -219,5 +219,8 @@ self_attn 就是一个极其复杂的变换过程，把 input_layernormed 自己
 
 ```mermaid
 graph TD;
-    A[This is an <b>important</b> <a href='https://google.com'>link</a>];
+input-->input_ids
+input_ids[<a href='run-without-batch/input_ids.txt'>input_ids</a><br/>7<br/>token序列的长度]
+input_ids-->input_embeds
+input_embeds[input_embeds<br/>7, 3200<br/>token序列的长度, 模型 hidden size]
 ```

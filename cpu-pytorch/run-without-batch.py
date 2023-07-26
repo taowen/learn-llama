@@ -37,26 +37,31 @@ class GlobalCache:
     sp: any = None
 
 already_logged = set()
-def log_tensor(all_values, name, description):
+mermaid_lines = []
+def log_tensor(all_values, name, description, inputs):
     if name in already_logged:
         return
     already_logged.add(name)
     value = all_values[name]
+    for input in inputs:
+        mermaid_lines.append(f'{input}-->{name}')
+    shape = ', '.join(map(str, value.shape))
+    mermaid_lines.append(f'{name}[{name}<br/>{shape}<br/>{", ".join(description)}]')
     script_name_with_suffix = os.path.basename(sys.argv[0])
     script_name_without_suffix = os.path.splitext(script_name_with_suffix)[0]
     if not os.path.exists(script_name_without_suffix):
         os.mkdir(script_name_without_suffix)
     with open(f'{script_name_without_suffix}/{name}.txt', 'w') as f:
-        f.write(','.join(map(str, value.shape)) + '\n')
+        f.write(shape)
+        f.write('\n')
         f.write(str(value))
-        f.write('\n\n')
-        for row in value:
-            row_str = '  '.join(map(lambda x: hex(struct.unpack('<I', struct.pack('<f', x))[0])[2:], row.tolist()))
-            f.write(row_str + '\n')
 
 def main():
     cache = GlobalCache(device=torch.device('cpu'), layers=[LayerCache(index=i) for i in range(26)])
     input_ids = torch.tensor(tokenizer_encode(cache, 'Once upon a time, '), dtype=torch.long)
+    log_tensor(locals(), 'input_ids', 
+               ['token序列的长度'],
+               ['input'])
     print('input_ids', input_ids) # tensor([    1,  4095,  3194,   260,   632, 29522, 29500])
     print('input_ids.shape', input_ids.shape) # torch.Size([7])
     output_ids = decode_one_token(cache, input_ids)
@@ -79,12 +84,13 @@ def main():
     ], dim=-1)
     print('output_ids', output_ids) # tensor([29532])
     print(tokenizer_decode(cache, output_ids.tolist()))
+    print('\n'.join(mermaid_lines))
 
 def decode_one_token(cache: GlobalCache, input_ids):
-    # input_ids is only one sequence
-    # embed_tokens want a batch of sequence as input, so need to unsqueeze to add a dimension
     input_embeds = embed_tokens(cache, input_ids)
-    log_tensor(locals(), 'input_embeds', ['token序列的长度','模型 hidden size'])
+    log_tensor(locals(), 'input_embeds', 
+               ['token序列的长度','模型 hidden size'], 
+               ['input_ids'])
     layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
     layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
     layer2_output = decode_layer(cache, cache.layers[2], layer_input=layer1_output)
