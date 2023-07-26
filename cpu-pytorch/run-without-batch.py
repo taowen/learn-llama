@@ -5,6 +5,9 @@ import json
 import sentencepiece
 import safetensors
 import math
+import struct
+import os
+import sys
 
 @dataclass
 class LayerCache:
@@ -32,6 +35,24 @@ class GlobalCache:
     output_layernorm_weight: any = None
     lm_head: any = None
     sp: any = None
+
+already_logged = set()
+def log_tensor(all_values, name, description):
+    if name in already_logged:
+        return
+    already_logged.add(name)
+    value = all_values[name]
+    script_name_with_suffix = os.path.basename(sys.argv[0])
+    script_name_without_suffix = os.path.splitext(script_name_with_suffix)[0]
+    if not os.path.exists(script_name_without_suffix):
+        os.mkdir(script_name_without_suffix)
+    with open(f'{script_name_without_suffix}/{name}.txt', 'w') as f:
+        f.write(','.join(map(str, value.shape)) + '\n')
+        f.write(str(value))
+        f.write('\n\n')
+        for row in value:
+            row_str = '  '.join(map(lambda x: hex(struct.unpack('<I', struct.pack('<f', x))[0])[2:], row.tolist()))
+            f.write(row_str + '\n')
 
 def main():
     cache = GlobalCache(device=torch.device('cpu'), layers=[LayerCache(index=i) for i in range(26)])
@@ -63,8 +84,7 @@ def decode_one_token(cache: GlobalCache, input_ids):
     # input_ids is only one sequence
     # embed_tokens want a batch of sequence as input, so need to unsqueeze to add a dimension
     input_embeds = embed_tokens(cache, input_ids)
-    print('input_embeds', input_embeds)
-    print('input_embeds.shape', input_embeds.shape) # torch.Size([1, 7, 3200])
+    log_tensor(locals(), 'input_embeds', ['token序列的长度','模型 hidden size'])
     layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
     layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
     layer2_output = decode_layer(cache, cache.layers[2], layer_input=layer1_output)
