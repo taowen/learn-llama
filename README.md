@@ -42,6 +42,7 @@ llama+gptq has multiple open source impelementations, it is like hello world for
 * https://github.com/tpoisonooo/llama.onnx
 * https://github.com/jmorganca/ollama/blob/main/llama/llama.go
 * https://github.com/karpathy/llama2.c
+* https://github.com/ayaka14732/llama-2-jax
 
 ## gptq quantization
 * https://github.com/IST-DASLab/gptq
