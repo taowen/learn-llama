@@ -36,6 +36,16 @@ class GlobalCache:
     lm_head: any = None
     sp: any = None
 
+
+def script_name_with_suffix():
+    return os.path.basename(sys.argv[0])
+
+def log_dir():
+    script_name_without_suffix = os.path.splitext(script_name_with_suffix())[0]
+    if not os.path.exists(script_name_without_suffix):
+        os.mkdir(script_name_without_suffix)
+    return script_name_without_suffix
+
 already_logged = set()
 mermaid_lines = []
 def log_tensor(all_values, name, description, inputs):
@@ -47,23 +57,18 @@ def log_tensor(all_values, name, description, inputs):
         mermaid_lines.append(f'{input}-->{name}')
     shape = ', '.join(map(str, value.shape))
     mermaid_lines.append(f'{name}[{name}<br/>{shape}<br/>{", ".join(description)}]')
-    script_name_with_suffix = os.path.basename(sys.argv[0])
-    script_name_without_suffix = os.path.splitext(script_name_with_suffix)[0]
-    if not os.path.exists(script_name_without_suffix):
-        os.mkdir(script_name_without_suffix)
-    with open(f'{script_name_without_suffix}/{name}.txt', 'w') as f:
+    with open(f'{log_dir()}/{name}.txt', 'w') as f:
         f.write(shape)
         f.write('\n')
         f.write(str(value))
 
 def main():
     cache = GlobalCache(device=torch.device('cpu'), layers=[LayerCache(index=i) for i in range(26)])
-    input_ids = torch.tensor(tokenizer_encode(cache, 'Once upon a time, '), dtype=torch.long)
+    input_string = 'Once upon a time, '
+    input_ids = torch.tensor(tokenizer_encode(cache, input_string), dtype=torch.long)
     log_tensor(locals(), 'input_ids', 
                ['token序列的长度'],
-               ['input'])
-    print('input_ids', input_ids) # tensor([    1,  4095,  3194,   260,   632, 29522, 29500])
-    print('input_ids.shape', input_ids.shape) # torch.Size([7])
+               ['input_string'])
     output_ids = decode_one_token(cache, input_ids)
     print(output_ids)
     output_ids = torch.concat([
@@ -85,12 +90,20 @@ def main():
     print('output_ids', output_ids) # tensor([29532])
     print(tokenizer_decode(cache, output_ids.tolist()))
     print('\n'.join(mermaid_lines))
+    with open(f'{log_dir()}.md', 'w') as f:
+        f.write('# tensor 之间的依赖关系\n')
+        f.write(f'* [tensor 之间的计算算法]({script_name_with_suffix()})\n')
+        f.write(f'* [tensor 的 shape 和具体样本]({log_dir()})\n\n')
+        f.write('```mermaid\n')
+        f.write('graph TD;\n')
+        f.write(';\n'.join(mermaid_lines))
+        f.write('\n```\n')
 
 def decode_one_token(cache: GlobalCache, input_ids):
     input_embeds = embed_tokens(cache, input_ids)
     log_tensor(locals(), 'input_embeds', 
                ['token序列的长度','模型 hidden size'], 
-               ['input_ids'])
+               ['input_ids', 'embed_tokens_weight'])
     layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
     layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
     layer2_output = decode_layer(cache, cache.layers[2], layer_input=layer1_output)
@@ -130,9 +143,9 @@ def decode_one_token(cache: GlobalCache, input_ids):
 
 def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
     input_layernormed = input_layernorm(cache, layer, layer_input)
-    if layer.index == 0:
-        print('input_layernormed', input_layernormed)
-        print('input_layernormed.shape', input_layernormed.shape) # torch.Size([1, 7, 3200])
+    log_tensor(locals(), 'input_layernormed',
+               ['token序列的长度','模型 hidden size'], 
+               ['input_embeds'])
     attn_output = self_attn(cache, layer, input_layernormed) 
     if layer.index == 0:
         print('attn_output.shape', attn_output.shape) # torch.Size([1, 7, 3200])
@@ -230,7 +243,9 @@ def embed_tokens(cache: GlobalCache, input_ids):
             embedding_dim=config['hidden_size'], # hidden_size=3200
             padding_idx=config['pad_token_id'], # pad_token_id=0
         )
-        cache.embed_tokens.weight = torch.nn.Parameter(load_safetensors(cache, 'model.embed_tokens.weight'))
+        embed_tokens_weight = load_safetensors(cache, 'model.embed_tokens.weight')
+        cache.embed_tokens.weight = torch.nn.Parameter(embed_tokens_weight)
+        log_tensor(locals(), 'embed_tokens_weight', ['字典大小', '模型 hidden size'], [])
     return cache.embed_tokens.forward(input_ids)
 
 def head_dim(cache: GlobalCache):
@@ -244,10 +259,17 @@ def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     config = model_config(cache)
     q_len, _ = input_layernormed.size()
     query_states = q_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
-    if layer.index == 0:
-        print('query_states.shape', query_states.shape) # torch.Size([1, 32, 7, 100])
+    log_tensor(locals(), 'query_states', 
+               ['头的个数', 'token序列的长度', '每头 hidden size'],
+               ['input_layernormed', 'q_proj_weight'])
     key_states = k_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    log_tensor(locals(), 'key_states',
+               ['头的个数', 'token序列的长度', '每头 hidden size'],
+               ['input_layernormed', 'k_proj_weight'])
     value_states = v_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    log_tensor(locals(), 'value_states',
+               ['头的个数', 'token序列的长度', '每头 hidden size'],
+               ['input_layernormed', 'v_proj_weight'])
     pos_query_states = apply_rotary_pos_emb(cache, query_states)
     pos_key_states = apply_rotary_pos_emb(cache, key_states)
     if layer.index == 0:
@@ -276,27 +298,33 @@ def q_proj(cache: GlobalCache, layer: LayerCache, input_layernormed):
     if layer.q_proj is None:
         config = model_config(cache)
         layer.q_proj = nn.Linear(in_features=config['hidden_size'], out_features=config['num_attention_heads'] * head_dim(cache), bias=False)
-        layer.q_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.q_proj.weight'))
-        if layer.index == 0:
-            print('q_proj.weight.shape', layer.q_proj.weight.shape) # torch.Size([3200, 32 * 100])
+        q_proj_weight = load_safetensors(cache, f'model.layers.{layer.index}.self_attn.q_proj.weight')
+        layer.q_proj.weight = nn.Parameter(q_proj_weight)
+        log_tensor(locals(), 'q_proj_weight', 
+                   ['模型 hidden size', '头个数 * 每头 hidden size'],
+                   [])
     return layer.q_proj.forward(input_layernormed)
 
 def k_proj(cache: GlobalCache, layer: LayerCache, input_layernormed):
     if layer.k_proj is None:
         config = model_config(cache)
         layer.k_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
-        layer.k_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.k_proj.weight'))
-        if layer.index == 0:
-            print('k_proj.weight.shape', layer.k_proj.weight.shape) # torch.Size([3200, 32 * 100])
+        k_proj_weight = load_safetensors(cache, f'model.layers.{layer.index}.self_attn.k_proj.weight')
+        layer.k_proj.weight = nn.Parameter(k_proj_weight)
+        log_tensor(locals(), 'k_proj_weight', 
+                   ['模型 hidden size', '头个数 * 每头 hidden size'],
+                   [])
     return layer.k_proj.forward(input_layernormed)
 
 def v_proj(cache: GlobalCache, layer: LayerCache, input_layernormed):
     if layer.v_proj is None:
         config = model_config(cache)
         layer.v_proj = nn.Linear(config['hidden_size'], config['num_attention_heads'] * head_dim(cache), bias=False)
-        layer.v_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.self_attn.v_proj.weight'))
-        if layer.index == 0:
-            print('v_proj.weight.shape', layer.v_proj.weight.shape) # torch.Size([3200, 32 * 100])
+        v_proj_weight = load_safetensors(cache, f'model.layers.{layer.index}.self_attn.v_proj.weight')
+        layer.v_proj.weight = nn.Parameter(v_proj_weight)
+        log_tensor(locals(), 'v_proj_weight', 
+                   ['模型 hidden size', '头个数 * 每头 hidden size'],
+                   [])
     return layer.v_proj.forward(input_layernormed)
 
 def o_proj(cache: GlobalCache, layer: LayerCache, attn_tmp_output3):
