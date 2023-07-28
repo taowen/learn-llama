@@ -38,49 +38,49 @@ class GlobalCache:
 def main():
     cache = GlobalCache(device=torch.device('cpu'), layers=[LayerCache(index=i) for i in range(26)])
     input_ids = torch.tensor(tokenizer_encode(cache, 'Once upon a time, '), dtype=torch.long)
-    print('input_ids', input_ids) # tensor([    1,  4095,  3194,   260,   632, 29522, 29500])
-    output_ids = last_output_ids = decode_first_token(cache, input_ids)
-    print('===')
-    last_output_ids = decode_more_token(cache, last_output_ids)
+    prefill_input_ids, predict_input_ids = input_ids[:-1], input_ids[-1:]
+    prefill_kv_cache(cache, prefill_input_ids)
+    output_ids = last_output_ids = decode_one_token(cache, predict_input_ids)
+    last_output_ids = decode_one_token(cache, last_output_ids)
     output_ids = torch.concat([output_ids, last_output_ids], dim=-1)
-    last_output_ids = decode_more_token(cache, last_output_ids)
+    last_output_ids = decode_one_token(cache, last_output_ids)
     output_ids = torch.concat([output_ids, last_output_ids], dim=-1)
-    last_output_ids = decode_more_token(cache, last_output_ids)
+    last_output_ids = decode_one_token(cache, last_output_ids)
     output_ids = torch.concat([output_ids, last_output_ids], dim=-1)
-    last_output_ids = decode_more_token(cache, last_output_ids)
+    last_output_ids = decode_one_token(cache, last_output_ids)
     output_ids = torch.concat([output_ids, last_output_ids], dim=-1)
     print('output_ids', output_ids)
     print(tokenizer_decode(cache, output_ids.tolist()))
 
 
-def decode_more_token(cache:GlobalCache, last_output_ids):
+def decode_one_token(cache:GlobalCache, last_output_ids):
     input_embeds = embed_tokens(cache, last_output_ids.unsqueeze(0))
-    layer0_output = decode_more_token_layer(cache, cache.layers[0], layer_input=input_embeds)
-    layer1_output = decode_more_token_layer(cache, cache.layers[1], layer_input=layer0_output)
-    layer2_output = decode_more_token_layer(cache, cache.layers[2], layer_input=layer1_output)
-    layer3_output = decode_more_token_layer(cache, cache.layers[3], layer_input=layer2_output)
-    layer4_output = decode_more_token_layer(cache, cache.layers[4], layer_input=layer3_output)
-    layer5_output = decode_more_token_layer(cache, cache.layers[5], layer_input=layer4_output)
-    layer6_output = decode_more_token_layer(cache, cache.layers[6], layer_input=layer5_output)
-    layer7_output = decode_more_token_layer(cache, cache.layers[7], layer_input=layer6_output)
-    layer8_output = decode_more_token_layer(cache, cache.layers[8], layer_input=layer7_output)
-    layer9_output = decode_more_token_layer(cache, cache.layers[9], layer_input=layer8_output)
-    layer10_output = decode_more_token_layer(cache, cache.layers[10], layer_input=layer9_output)
-    layer11_output = decode_more_token_layer(cache, cache.layers[11], layer_input=layer10_output)
-    layer12_output = decode_more_token_layer(cache, cache.layers[12], layer_input=layer11_output)
-    layer13_output = decode_more_token_layer(cache, cache.layers[13], layer_input=layer12_output)
-    layer14_output = decode_more_token_layer(cache, cache.layers[14], layer_input=layer13_output)
-    layer15_output = decode_more_token_layer(cache, cache.layers[15], layer_input=layer14_output)
-    layer16_output = decode_more_token_layer(cache, cache.layers[16], layer_input=layer15_output)
-    layer17_output = decode_more_token_layer(cache, cache.layers[17], layer_input=layer16_output)
-    layer18_output = decode_more_token_layer(cache, cache.layers[18], layer_input=layer17_output)
-    layer19_output = decode_more_token_layer(cache, cache.layers[19], layer_input=layer18_output)
-    layer20_output = decode_more_token_layer(cache, cache.layers[20], layer_input=layer19_output)
-    layer21_output = decode_more_token_layer(cache, cache.layers[21], layer_input=layer20_output)
-    layer22_output = decode_more_token_layer(cache, cache.layers[22], layer_input=layer21_output)
-    layer23_output = decode_more_token_layer(cache, cache.layers[23], layer_input=layer22_output)
-    layer24_output = decode_more_token_layer(cache, cache.layers[24], layer_input=layer23_output)
-    layer25_output = decode_more_token_layer(cache, cache.layers[25], layer_input=layer24_output)
+    layer0_output = decode_layer(cache, cache.layers[0], layer_input=input_embeds)
+    layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
+    layer2_output = decode_layer(cache, cache.layers[2], layer_input=layer1_output)
+    layer3_output = decode_layer(cache, cache.layers[3], layer_input=layer2_output)
+    layer4_output = decode_layer(cache, cache.layers[4], layer_input=layer3_output)
+    layer5_output = decode_layer(cache, cache.layers[5], layer_input=layer4_output)
+    layer6_output = decode_layer(cache, cache.layers[6], layer_input=layer5_output)
+    layer7_output = decode_layer(cache, cache.layers[7], layer_input=layer6_output)
+    layer8_output = decode_layer(cache, cache.layers[8], layer_input=layer7_output)
+    layer9_output = decode_layer(cache, cache.layers[9], layer_input=layer8_output)
+    layer10_output = decode_layer(cache, cache.layers[10], layer_input=layer9_output)
+    layer11_output = decode_layer(cache, cache.layers[11], layer_input=layer10_output)
+    layer12_output = decode_layer(cache, cache.layers[12], layer_input=layer11_output)
+    layer13_output = decode_layer(cache, cache.layers[13], layer_input=layer12_output)
+    layer14_output = decode_layer(cache, cache.layers[14], layer_input=layer13_output)
+    layer15_output = decode_layer(cache, cache.layers[15], layer_input=layer14_output)
+    layer16_output = decode_layer(cache, cache.layers[16], layer_input=layer15_output)
+    layer17_output = decode_layer(cache, cache.layers[17], layer_input=layer16_output)
+    layer18_output = decode_layer(cache, cache.layers[18], layer_input=layer17_output)
+    layer19_output = decode_layer(cache, cache.layers[19], layer_input=layer18_output)
+    layer20_output = decode_layer(cache, cache.layers[20], layer_input=layer19_output)
+    layer21_output = decode_layer(cache, cache.layers[21], layer_input=layer20_output)
+    layer22_output = decode_layer(cache, cache.layers[22], layer_input=layer21_output)
+    layer23_output = decode_layer(cache, cache.layers[23], layer_input=layer22_output)
+    layer24_output = decode_layer(cache, cache.layers[24], layer_input=layer23_output)
+    layer25_output = decode_layer(cache, cache.layers[25], layer_input=layer24_output)
 
     output_layernormed = output_layernorm(cache, layer25_output)
     logits = lm_head(cache, output_layernormed)
@@ -88,52 +88,42 @@ def decode_more_token(cache:GlobalCache, last_output_ids):
     next_tokens = torch.argmax(last_logit, dim=-1)
     return next_tokens
 
-def decode_first_token(cache: GlobalCache, input_ids):
+def prefill_kv_cache(cache: GlobalCache, input_ids):
     # input_ids is only one sequence
     # embed_tokens want a batch of sequence as input, so need to unsqueeze to add a dimension
     print('input_ids.shape', input_ids.shape) # torch.Size([7])
     input_embeds = embed_tokens(cache, input_ids.unsqueeze(0))
     print('input_embeds.shape', input_embeds.shape) # torch.Size([1, 7, 3200])
-    layer0_output = decode_first_token_layer(cache, cache.layers[0], layer_input=input_embeds)
-    layer1_output = decode_first_token_layer(cache, cache.layers[1], layer_input=layer0_output)
-    layer2_output = decode_first_token_layer(cache, cache.layers[2], layer_input=layer1_output)
-    layer3_output = decode_first_token_layer(cache, cache.layers[3], layer_input=layer2_output)
-    layer4_output = decode_first_token_layer(cache, cache.layers[4], layer_input=layer3_output)
-    layer5_output = decode_first_token_layer(cache, cache.layers[5], layer_input=layer4_output)
-    layer6_output = decode_first_token_layer(cache, cache.layers[6], layer_input=layer5_output)
-    layer7_output = decode_first_token_layer(cache, cache.layers[7], layer_input=layer6_output)
-    layer8_output = decode_first_token_layer(cache, cache.layers[8], layer_input=layer7_output)
-    layer9_output = decode_first_token_layer(cache, cache.layers[9], layer_input=layer8_output)
-    layer10_output = decode_first_token_layer(cache, cache.layers[10], layer_input=layer9_output)
-    layer11_output = decode_first_token_layer(cache, cache.layers[11], layer_input=layer10_output)
-    layer12_output = decode_first_token_layer(cache, cache.layers[12], layer_input=layer11_output)
-    layer13_output = decode_first_token_layer(cache, cache.layers[13], layer_input=layer12_output)
-    layer14_output = decode_first_token_layer(cache, cache.layers[14], layer_input=layer13_output)
-    layer15_output = decode_first_token_layer(cache, cache.layers[15], layer_input=layer14_output)
-    layer16_output = decode_first_token_layer(cache, cache.layers[16], layer_input=layer15_output)
-    layer17_output = decode_first_token_layer(cache, cache.layers[17], layer_input=layer16_output)
-    layer18_output = decode_first_token_layer(cache, cache.layers[18], layer_input=layer17_output)
-    layer19_output = decode_first_token_layer(cache, cache.layers[19], layer_input=layer18_output)
-    layer20_output = decode_first_token_layer(cache, cache.layers[20], layer_input=layer19_output)
-    layer21_output = decode_first_token_layer(cache, cache.layers[21], layer_input=layer20_output)
-    layer22_output = decode_first_token_layer(cache, cache.layers[22], layer_input=layer21_output)
-    layer23_output = decode_first_token_layer(cache, cache.layers[23], layer_input=layer22_output)
-    layer24_output = decode_first_token_layer(cache, cache.layers[24], layer_input=layer23_output)
-    layer25_output = decode_first_token_layer(cache, cache.layers[25], layer_input=layer24_output)
+    layer0_output = prefill_layer_kv_cache(cache, cache.layers[0], layer_input=input_embeds)
+    layer1_output = prefill_layer_kv_cache(cache, cache.layers[1], layer_input=layer0_output)
+    layer2_output = prefill_layer_kv_cache(cache, cache.layers[2], layer_input=layer1_output)
+    layer3_output = prefill_layer_kv_cache(cache, cache.layers[3], layer_input=layer2_output)
+    layer4_output = prefill_layer_kv_cache(cache, cache.layers[4], layer_input=layer3_output)
+    layer5_output = prefill_layer_kv_cache(cache, cache.layers[5], layer_input=layer4_output)
+    layer6_output = prefill_layer_kv_cache(cache, cache.layers[6], layer_input=layer5_output)
+    layer7_output = prefill_layer_kv_cache(cache, cache.layers[7], layer_input=layer6_output)
+    layer8_output = prefill_layer_kv_cache(cache, cache.layers[8], layer_input=layer7_output)
+    layer9_output = prefill_layer_kv_cache(cache, cache.layers[9], layer_input=layer8_output)
+    layer10_output = prefill_layer_kv_cache(cache, cache.layers[10], layer_input=layer9_output)
+    layer11_output = prefill_layer_kv_cache(cache, cache.layers[11], layer_input=layer10_output)
+    layer12_output = prefill_layer_kv_cache(cache, cache.layers[12], layer_input=layer11_output)
+    layer13_output = prefill_layer_kv_cache(cache, cache.layers[13], layer_input=layer12_output)
+    layer14_output = prefill_layer_kv_cache(cache, cache.layers[14], layer_input=layer13_output)
+    layer15_output = prefill_layer_kv_cache(cache, cache.layers[15], layer_input=layer14_output)
+    layer16_output = prefill_layer_kv_cache(cache, cache.layers[16], layer_input=layer15_output)
+    layer17_output = prefill_layer_kv_cache(cache, cache.layers[17], layer_input=layer16_output)
+    layer18_output = prefill_layer_kv_cache(cache, cache.layers[18], layer_input=layer17_output)
+    layer19_output = prefill_layer_kv_cache(cache, cache.layers[19], layer_input=layer18_output)
+    layer20_output = prefill_layer_kv_cache(cache, cache.layers[20], layer_input=layer19_output)
+    layer21_output = prefill_layer_kv_cache(cache, cache.layers[21], layer_input=layer20_output)
+    layer22_output = prefill_layer_kv_cache(cache, cache.layers[22], layer_input=layer21_output)
+    layer23_output = prefill_layer_kv_cache(cache, cache.layers[23], layer_input=layer22_output)
+    layer24_output = prefill_layer_kv_cache(cache, cache.layers[24], layer_input=layer23_output)
+    prefill_layer_kv_cache(cache, cache.layers[25], layer_input=layer24_output)
 
-    output_layernormed = output_layernorm(cache, layer25_output)
-    print('output_layernormed.shape', output_layernormed.shape)
-    logits = lm_head(cache, output_layernormed)
-    print('logits.shape', logits.shape)
-    last_logit = logits[:, -1, :]
-    print('last_logit', last_logit)
-    print('last_logit.shape', last_logit.shape)
-    next_tokens = torch.argmax(last_logit, dim=-1)
-    return next_tokens
-
-def decode_more_token_layer(cache: GlobalCache, layer: LayerCache, layer_input):
+def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
     input_layernormed = input_layernorm(cache, layer, layer_input)
-    attn_output = self_attn_more_token(cache, layer, input_layernormed) 
+    attn_output = self_attn(cache, layer, input_layernormed) 
     # input_embeds is residual
     attn_output = layer_input + attn_output
     attn_output_layernormed = post_attention_layernorm(cache, layer, attn_output)
@@ -144,11 +134,11 @@ def decode_more_token_layer(cache: GlobalCache, layer: LayerCache, layer_input):
     layer_output = attn_output + layer_output
     return layer_output
 
-def decode_first_token_layer(cache: GlobalCache, layer: LayerCache, layer_input):
+def prefill_layer_kv_cache(cache: GlobalCache, layer: LayerCache, layer_input):
     input_layernormed = input_layernorm(cache, layer, layer_input)
     if layer.index == 0:
         print('input_layernormed.shape', input_layernormed.shape) # torch.Size([1, 7, 3200])
-    attn_output = self_attn_first_token(cache, layer, input_layernormed) 
+    attn_output = prefill_self_attn(cache, layer, input_layernormed) 
     if layer.index == 0:
         print('attn_output.shape', attn_output.shape) # torch.Size([1, 7, 3200])
     # input_embeds is residual
@@ -256,7 +246,7 @@ def head_dim(cache: GlobalCache):
         print('head_dim', cache.head_dim)
     return cache.head_dim
 
-def self_attn_more_token(cache: GlobalCache, layer: LayerCache, input_layernormed):
+def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     config = model_config(cache)
     bsz, q_len, _ = input_layernormed.size()
     more_query_states = q_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
@@ -279,7 +269,7 @@ def self_attn_more_token(cache: GlobalCache, layer: LayerCache, input_layernorme
     attn_output = o_proj(cache, layer, attn_tmp_output3)
     return attn_output
 
-def self_attn_first_token(cache: GlobalCache, layer: LayerCache, input_layernormed):
+def prefill_self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     config = model_config(cache)
     bsz, q_len, _ = input_layernormed.size()
     query_states = q_proj(cache, layer, input_layernormed).view(bsz, q_len, config['num_attention_heads'], head_dim(cache)).transpose(1, 2)
