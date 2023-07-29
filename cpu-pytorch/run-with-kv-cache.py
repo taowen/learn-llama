@@ -320,23 +320,38 @@ def prefill_self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
     prefill_key_states = k_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
     log_tensor(locals(), 'prefill_key_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_input_layernormed'])
     layer.prefill_value_states = prefill_value_states = v_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    log_tensor(locals(), 'prefill_value_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_input_layernormed'])
     prefill_pos_query_states = apply_rotary_pos_emb(cache, prefill_query_states, 0, q_len)
     log_tensor(locals(), 'prefill_pos_query_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_query_states'])
     layer.prefill_pos_key_states = prefill_pos_key_states = apply_rotary_pos_emb(cache, prefill_key_states, 0, q_len)
     log_tensor(locals(), 'prefill_pos_key_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_key_states'])
     prefill_unmasked_attn_weights = torch.matmul(prefill_pos_query_states, prefill_pos_key_states.transpose(1, 2)) / math.sqrt(head_dim(cache))
-    log_tensor(locals(), 'prefill_unmasked_attn_weights', ['头的个数', '填充缓存的token序列', '填充缓存的token序列'], ['prefill_pos_query_states', 'prefill_pos_key_states'])
+    log_tensor(locals(), 'prefill_unmasked_attn_weights', 
+               ['头的个数', '填充缓存的token序列', '填充缓存的token序列'], 
+               ['prefill_pos_query_states', 'prefill_pos_key_states'])
     prefill_causal_mask = causal_mask_of_seq(cache, q_len)
-    log_tensor(locals(), 'prefill_causal_mask', ['固定为1,表示对所有的头使用相同的mask', '填充缓存的token序列', '填充缓存的token序列'], [])
-    attn_weights = prefill_unmasked_attn_weights + prefill_causal_mask
-    attn_weights = torch.max(
-        attn_weights, torch.tensor(torch.finfo(attn_weights.dtype).min, device=attn_weights.device)
+    log_tensor(locals(), 'prefill_causal_mask', 
+               ['固定为1,表示对所有的头使用相同的mask', '填充缓存的token序列', '填充缓存的token序列'], [])
+    prefill_masked_attn_weights = torch.max(
+        prefill_unmasked_attn_weights + prefill_causal_mask, torch.tensor(torch.finfo(prefill_unmasked_attn_weights.dtype).min)
     )
-    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
-    attn_tmp_output1 = torch.matmul(attn_weights, prefill_value_states)
-    attn_tmp_output2 = attn_tmp_output1.transpose(0, 1)
-    attn_tmp_output3 = attn_tmp_output2.reshape(q_len, config['hidden_size'])
-    attn_output = o_proj(cache, layer, attn_tmp_output3)
+    log_tensor(locals(), 'prefill_masked_attn_weights', 
+               ['头的个数', '填充缓存的token序列', '填充缓存的token序列'], 
+               ['prefill_unmasked_attn_weights', 'prefill_causal_mask'])
+    prefill_attn_weights = nn.functional.softmax(prefill_masked_attn_weights, dim=-1)
+    log_tensor(locals(), 'prefill_attn_weights', 
+               ['头的个数', '填充缓存的token序列', '填充缓存的token序列'], ['prefill_masked_attn_weights'])
+    prefill_attn_tmp_output1 = torch.matmul(prefill_attn_weights, prefill_value_states)
+    log_tensor(locals(), 'prefill_attn_tmp_output1', 
+               ['头的个数', '填充缓存的token序列',  '每头 hidden size'], 
+               ['prefill_attn_weights', 'prefill_value_states'])
+    prefill_attn_tmp_output2 = prefill_attn_tmp_output1.transpose(0, 1)
+    log_tensor(locals(), 'prefill_attn_tmp_output2', 
+               ['填充缓存的token序列', '头的个数', '每头 hidden size'], ['prefill_attn_tmp_output1'])
+    prefill_attn_tmp_output3 = prefill_attn_tmp_output2.reshape(q_len, config['hidden_size'])
+    log_tensor(locals(), 'prefill_attn_tmp_output3', 
+               ['填充缓存的token序列', '模型 hidden size'], ['prefill_attn_tmp_output2'])
+    attn_output = o_proj(cache, layer, prefill_attn_tmp_output3)
     return attn_output
 
 def q_proj(cache: GlobalCache, layer: LayerCache, input_layernormed):
