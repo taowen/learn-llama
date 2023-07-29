@@ -77,10 +77,10 @@ def main():
     prefill_input_ids, predict_input_ids = input_ids[:-1], input_ids[-1:]
     log_tensor(locals(), 'prefill_input_ids', ['填充缓存的token序列'], ['input_ids'])
     log_tensor(locals(), 'predict_input_ids', ['预测的token序列'], ['input_ids'])
-    mermaid_lines.append('subgraph prefill')
+    mermaid_lines.append('subgraph 用前6个token prefill')
     prefill_kv_cache(cache, prefill_input_ids)
     mermaid_lines.append('end')
-    mermaid_lines.append('subgraph predict')
+    mermaid_lines.append('subgraph 用第7个 token predict 第8个 token')
     output_ids = last_output_ids = decode_one_token(cache, predict_input_ids)
     mermaid_lines.append('end')
     last_output_ids = decode_one_token(cache, last_output_ids)
@@ -101,43 +101,6 @@ def main():
         f.write('graph TD;\n')
         f.write(';\n'.join(mermaid_lines))
         f.write('\n```\n')
-
-
-def decode_one_token(cache:GlobalCache, last_output_ids):
-    predict_input_embeds = embed_tokens(cache, last_output_ids)
-    log_tensor(locals(), 'predict_input_embeds', ['预测的token序列', '模型 hidden size'], ['predict_input_ids'])
-    layer0_output = decode_layer(cache, cache.layers[0], layer_input=predict_input_embeds)
-    layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
-    layer2_output = decode_layer(cache, cache.layers[2], layer_input=layer1_output)
-    layer3_output = decode_layer(cache, cache.layers[3], layer_input=layer2_output)
-    layer4_output = decode_layer(cache, cache.layers[4], layer_input=layer3_output)
-    layer5_output = decode_layer(cache, cache.layers[5], layer_input=layer4_output)
-    layer6_output = decode_layer(cache, cache.layers[6], layer_input=layer5_output)
-    layer7_output = decode_layer(cache, cache.layers[7], layer_input=layer6_output)
-    layer8_output = decode_layer(cache, cache.layers[8], layer_input=layer7_output)
-    layer9_output = decode_layer(cache, cache.layers[9], layer_input=layer8_output)
-    layer10_output = decode_layer(cache, cache.layers[10], layer_input=layer9_output)
-    layer11_output = decode_layer(cache, cache.layers[11], layer_input=layer10_output)
-    layer12_output = decode_layer(cache, cache.layers[12], layer_input=layer11_output)
-    layer13_output = decode_layer(cache, cache.layers[13], layer_input=layer12_output)
-    layer14_output = decode_layer(cache, cache.layers[14], layer_input=layer13_output)
-    layer15_output = decode_layer(cache, cache.layers[15], layer_input=layer14_output)
-    layer16_output = decode_layer(cache, cache.layers[16], layer_input=layer15_output)
-    layer17_output = decode_layer(cache, cache.layers[17], layer_input=layer16_output)
-    layer18_output = decode_layer(cache, cache.layers[18], layer_input=layer17_output)
-    layer19_output = decode_layer(cache, cache.layers[19], layer_input=layer18_output)
-    layer20_output = decode_layer(cache, cache.layers[20], layer_input=layer19_output)
-    layer21_output = decode_layer(cache, cache.layers[21], layer_input=layer20_output)
-    layer22_output = decode_layer(cache, cache.layers[22], layer_input=layer21_output)
-    layer23_output = decode_layer(cache, cache.layers[23], layer_input=layer22_output)
-    layer24_output = decode_layer(cache, cache.layers[24], layer_input=layer23_output)
-    layer25_output = decode_layer(cache, cache.layers[25], layer_input=layer24_output)
-
-    output_layernormed = output_layernorm(cache, layer25_output)
-    logits = lm_head(cache, output_layernormed)
-    last_logit = logits[-1, :]
-    next_tokens = torch.argmax(last_logit, dim=-1).unsqueeze(0)
-    return next_tokens
 
 def prefill_kv_cache(cache: GlobalCache, prefill_input_ids):
     # input_ids is only one sequence
@@ -170,19 +133,7 @@ def prefill_kv_cache(cache: GlobalCache, prefill_input_ids):
     layer23_output = prefill_layer_kv_cache(cache, cache.layers[23], layer_input=layer22_output)
     layer24_output = prefill_layer_kv_cache(cache, cache.layers[24], layer_input=layer23_output)
     prefill_layer_kv_cache(cache, cache.layers[25], layer_input=layer24_output)
-
-def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
-    input_layernormed = input_layernorm(cache, layer, layer_input)
-    attn_output = self_attn(cache, layer, input_layernormed) 
-    # input_embeds is residual
-    attn_output = layer_input + attn_output
-    attn_output_layernormed = post_attention_layernorm(cache, layer, attn_output)
-    if layer.index == 0:
-        print('attn_output_layernormed.shape', attn_output_layernormed.shape)
-    layer_output = mlp(cache, layer, attn_output_layernormed)
-    # attn_output is residual
-    layer_output = attn_output + layer_output
-    return layer_output
+    log_mermaid_line('prefill_layer_output --循环26次--> prefill_input_embeds')
 
 def prefill_layer_kv_cache(cache: GlobalCache, layer: LayerCache, layer_input):
     prefill_input_layernormed = input_layernorm(cache, layer, layer_input)
@@ -190,11 +141,171 @@ def prefill_layer_kv_cache(cache: GlobalCache, layer: LayerCache, layer_input):
     prefill_attn_output = prefill_self_attn(cache, layer, prefill_input_layernormed) 
     # input_embeds is residual
     prefill_attn_output = layer_input + prefill_attn_output
-    attn_output_layernormed = post_attention_layernorm(cache, layer, prefill_attn_output)
-    prefill_layer_output = mlp(cache, layer, attn_output_layernormed)
+    log_tensor(locals(), 'prefill_attn_output', 
+               ['填充缓存的token序列','模型 hidden size'], 
+               ['prefill_input_embeds', 'prefill_attn_tmp_output3'])
+    prefill_attn_output_layernormed = post_attention_layernorm(cache, layer, prefill_attn_output)
+    log_tensor(locals(), 'prefill_attn_output_layernormed', 
+               ['填充缓存的token序列','模型 hidden size'], 
+               ['prefill_attn_output'])
+    prefill_layer_output = prefill_mlp(cache, layer, prefill_attn_output_layernormed)
     # attn_output is residual
     prefill_layer_output = prefill_attn_output + prefill_layer_output
+    log_tensor(locals(), 'prefill_layer_output', 
+               ['填充缓存的token序列','模型 hidden size'], 
+               ['prefill_attn_output', 'prefill_attn_output_layernormed'])
     return prefill_layer_output
+
+def prefill_self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
+    config = model_config(cache)
+    q_len, _ = input_layernormed.size()
+    prefill_query_states = q_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    log_tensor(locals(), 'prefill_query_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_input_layernormed'])
+    prefill_key_states = k_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    log_tensor(locals(), 'prefill_key_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_input_layernormed'])
+    layer.prefill_value_states = prefill_value_states = v_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    log_tensor(locals(), 'prefill_value_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_input_layernormed'])
+    prefill_pos_query_states = apply_rotary_pos_emb(cache, prefill_query_states, 0, q_len)
+    log_tensor(locals(), 'prefill_pos_query_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_query_states'])
+    layer.prefill_pos_key_states = prefill_pos_key_states = apply_rotary_pos_emb(cache, prefill_key_states, 0, q_len)
+    log_tensor(locals(), 'prefill_pos_key_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_key_states'])
+    prefill_unmasked_attn_weights = torch.matmul(prefill_pos_query_states, prefill_pos_key_states.transpose(1, 2)) / math.sqrt(head_dim(cache))
+    log_tensor(locals(), 'prefill_unmasked_attn_weights', 
+               ['头的个数', '填充缓存的token序列', '填充缓存的token序列'], 
+               ['prefill_pos_query_states', 'prefill_pos_key_states'])
+    prefill_causal_mask = causal_mask_of_seq(cache, q_len)
+    log_tensor(locals(), 'prefill_causal_mask', 
+               ['固定为1,表示对所有的头使用相同的mask', '填充缓存的token序列', '填充缓存的token序列'], [])
+    prefill_masked_attn_weights = torch.max(
+        prefill_unmasked_attn_weights + prefill_causal_mask, torch.tensor(torch.finfo(prefill_unmasked_attn_weights.dtype).min)
+    )
+    log_tensor(locals(), 'prefill_masked_attn_weights', 
+               ['头的个数', '填充缓存的token序列', '填充缓存的token序列'], 
+               ['prefill_unmasked_attn_weights', 'prefill_causal_mask'])
+    prefill_attn_weights = nn.functional.softmax(prefill_masked_attn_weights, dim=-1)
+    log_tensor(locals(), 'prefill_attn_weights', 
+               ['头的个数', '填充缓存的token序列', '填充缓存的token序列'], ['prefill_masked_attn_weights'])
+    prefill_attn_tmp_output1 = torch.matmul(prefill_attn_weights, prefill_value_states)
+    log_tensor(locals(), 'prefill_attn_tmp_output1', 
+               ['头的个数', '填充缓存的token序列',  '每头 hidden size'], 
+               ['prefill_attn_weights', 'prefill_value_states'])
+    prefill_attn_tmp_output2 = prefill_attn_tmp_output1.transpose(0, 1)
+    log_tensor(locals(), 'prefill_attn_tmp_output2', 
+               ['填充缓存的token序列', '头的个数', '每头 hidden size'], ['prefill_attn_tmp_output1'])
+    prefill_attn_tmp_output3 = prefill_attn_tmp_output2.reshape(q_len, config['hidden_size'])
+    log_tensor(locals(), 'prefill_attn_tmp_output3', 
+               ['填充缓存的token序列', '模型 hidden size'], ['prefill_attn_tmp_output2'])
+    attn_output = o_proj(cache, layer, prefill_attn_tmp_output3)
+    return attn_output
+
+def prefill_mlp(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
+    gate_projected = gate_proj(cache, layer, attn_output_layernormed)
+    up_projected = up_proj(cache, layer, attn_output_layernormed)
+    activated = nn.functional.silu(gate_projected) * up_projected
+    return down_proj(cache, layer, activated)
+
+def decode_one_token(cache:GlobalCache, last_output_ids):
+    predict_input_embeds = embed_tokens(cache, last_output_ids)
+    log_tensor(locals(), 'predict_input_embeds', ['预测的token序列', '模型 hidden size'], ['predict_input_ids'])
+    layer0_output = decode_layer(cache, cache.layers[0], layer_input=predict_input_embeds)
+    layer1_output = decode_layer(cache, cache.layers[1], layer_input=layer0_output)
+    layer2_output = decode_layer(cache, cache.layers[2], layer_input=layer1_output)
+    layer3_output = decode_layer(cache, cache.layers[3], layer_input=layer2_output)
+    layer4_output = decode_layer(cache, cache.layers[4], layer_input=layer3_output)
+    layer5_output = decode_layer(cache, cache.layers[5], layer_input=layer4_output)
+    layer6_output = decode_layer(cache, cache.layers[6], layer_input=layer5_output)
+    layer7_output = decode_layer(cache, cache.layers[7], layer_input=layer6_output)
+    layer8_output = decode_layer(cache, cache.layers[8], layer_input=layer7_output)
+    layer9_output = decode_layer(cache, cache.layers[9], layer_input=layer8_output)
+    layer10_output = decode_layer(cache, cache.layers[10], layer_input=layer9_output)
+    layer11_output = decode_layer(cache, cache.layers[11], layer_input=layer10_output)
+    layer12_output = decode_layer(cache, cache.layers[12], layer_input=layer11_output)
+    layer13_output = decode_layer(cache, cache.layers[13], layer_input=layer12_output)
+    layer14_output = decode_layer(cache, cache.layers[14], layer_input=layer13_output)
+    layer15_output = decode_layer(cache, cache.layers[15], layer_input=layer14_output)
+    layer16_output = decode_layer(cache, cache.layers[16], layer_input=layer15_output)
+    layer17_output = decode_layer(cache, cache.layers[17], layer_input=layer16_output)
+    layer18_output = decode_layer(cache, cache.layers[18], layer_input=layer17_output)
+    layer19_output = decode_layer(cache, cache.layers[19], layer_input=layer18_output)
+    layer20_output = decode_layer(cache, cache.layers[20], layer_input=layer19_output)
+    layer21_output = decode_layer(cache, cache.layers[21], layer_input=layer20_output)
+    layer22_output = decode_layer(cache, cache.layers[22], layer_input=layer21_output)
+    layer23_output = decode_layer(cache, cache.layers[23], layer_input=layer22_output)
+    layer24_output = decode_layer(cache, cache.layers[24], layer_input=layer23_output)
+    layer25_output = decode_layer(cache, cache.layers[25], layer_input=layer24_output)
+    log_mermaid_line('layer_output --循环26次--> predict_input_embeds')
+
+    output_layernormed = output_layernorm(cache, layer25_output)
+    log_tensor(locals(), 'output_layernormed', ['预测的token序列', '模型 hidden size'], ['layer_output'])
+    logits = lm_head(cache, output_layernormed)
+    log_tensor(locals(), 'logits', ['预测的token序列', '字典大小'], ['output_layernormed'])
+    next_tokens = torch.argmax(logits, dim=-1)
+    log_tensor(locals(), 'next_tokens', ['一维数组'], ['logits'])
+    return next_tokens
+
+def decode_layer(cache: GlobalCache, layer: LayerCache, layer_input):
+    input_layernormed = input_layernorm(cache, layer, layer_input)
+    log_tensor(locals(), 'input_layernormed', ['预测的token序列', '模型 hidden size'], ['predict_input_embeds'])
+    attn_output = self_attn(cache, layer, input_layernormed) 
+    # input_embeds is residual
+    attn_output = layer_input + attn_output
+    log_tensor(locals(), 'attn_output', ['预测的token序列', '模型 hidden size'], ['predict_input_embeds', 'attn_tmp_output3'])
+    attn_output_layernormed = post_attention_layernorm(cache, layer, attn_output)
+    log_tensor(locals(), 'attn_output_layernormed', ['预测的token序列', '模型 hidden size'], ['attn_output'])
+    layer_output = mlp(cache, layer, attn_output_layernormed)
+    # attn_output is residual
+    layer_output = attn_output + layer_output
+    log_tensor(locals(), 'layer_output', ['预测的token序列', '模型 hidden size'], ['attn_output', 'activated'])
+    return layer_output
+
+def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
+    config = model_config(cache)
+    q_len, _ = input_layernormed.size()
+    query_states = q_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    log_tensor(locals(), 'query_states', ['预测的token序列', '头的个数', '每头 hidden size'], ['input_layernormed'])
+    more_key_states = k_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    log_tensor(locals(), 'more_key_states', ['预测的token序列', '头的个数', '每头 hidden size'], ['input_layernormed'])
+    more_value_states = v_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
+    log_tensor(locals(), 'more_value_states', ['预测的token序列', '头的个数', '每头 hidden size'], ['input_layernormed'])
+    past_kv_seq_len = layer.prefill_pos_key_states.shape[-2]
+    kv_seq_len = past_kv_seq_len + q_len
+    pos_query_states = apply_rotary_pos_emb(cache, query_states, past_kv_seq_len, kv_seq_len)
+    log_tensor(locals(), 'pos_query_states', ['预测的token序列', '头的个数', '每头 hidden size'], ['prefill_pos_key_states', 'query_states'])
+    pos_more_key_states = apply_rotary_pos_emb(cache, more_key_states, past_kv_seq_len, kv_seq_len)
+    log_tensor(locals(), 'pos_more_key_states', 
+               ['预测的token序列', '头的个数', '每头 hidden size'], 
+               ['prefill_pos_key_states', 'more_key_states'])
+    
+    layer.prefill_pos_key_states = pos_key_states = torch.cat([layer.prefill_pos_key_states, pos_more_key_states], dim=1)
+    log_tensor(locals(), 'pos_key_states', 
+               ['全token序列', '头的个数', '每头 hidden size'], 
+               ['prefill_pos_key_states', 'pos_more_key_states'])
+    layer.prefill_value_states = value_states = torch.cat([layer.prefill_value_states, more_value_states], dim=1)
+    log_tensor(locals(), 'value_states', 
+               ['全token序列', '头的个数', '每头 hidden size'], 
+               ['prefill_value_states', 'more_value_states'])
+
+    attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(1, 2)) / math.sqrt(head_dim(cache))
+    # 不需要 causal mask
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(pos_query_states.dtype)
+    log_tensor(locals(), 'attn_weights', ['头的个数', '预测的token序列', '全token序列'], ['pos_query_states', 'pos_key_states'])
+    attn_tmp_output1 = torch.matmul(attn_weights, value_states)
+    log_tensor(locals(), 'attn_tmp_output1', ['头的个数', '预测的token序列', '每头 hidden size'], ['attn_weights', 'value_states'])
+    attn_tmp_output2 = attn_tmp_output1.transpose(0, 1)
+    log_tensor(locals(), 'attn_tmp_output2', ['预测的token序列', '头的个数', '每头 hidden size'], ['attn_tmp_output1'])
+    attn_tmp_output3 = attn_tmp_output2.reshape(q_len, config['hidden_size'])
+    log_tensor(locals(), 'attn_tmp_output3', ['预测的token序列', '模型 hidden size'], ['attn_tmp_output2'])
+    attn_output = o_proj(cache, layer, attn_tmp_output3)
+    return attn_output
+
+def mlp(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
+    gate_projected = gate_proj(cache, layer, attn_output_layernormed)
+    log_tensor(locals(), 'gate_projected', ['预测的token序列', 'intermediate size'], ['attn_output_layernormed'])
+    up_projected = up_proj(cache, layer, attn_output_layernormed)
+    log_tensor(locals(), 'up_projected', ['预测的token序列', 'intermediate size'], ['attn_output_layernormed'])
+    activated = nn.functional.silu(gate_projected) * up_projected
+    log_tensor(locals(), 'activated', ['预测的token序列', 'intermediate size'], ['gate_projected', 'up_projected'])
+    return down_proj(cache, layer, activated)
 
 def lm_head(cache: GlobalCache, output_layernormed):
     if cache.lm_head is None:
@@ -289,71 +400,6 @@ def head_dim(cache: GlobalCache):
         print('head_dim', cache.head_dim)
     return cache.head_dim
 
-def self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
-    config = model_config(cache)
-    q_len, _ = input_layernormed.size()
-    more_query_states = q_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
-    more_key_states = k_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
-    more_value_states = v_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
-    past_kv_seq_len = layer.prefill_pos_key_states.shape[-2]
-    kv_seq_len = past_kv_seq_len + q_len
-    pos_query_states = apply_rotary_pos_emb(cache, more_query_states, past_kv_seq_len, kv_seq_len)
-    pos_more_key_states = apply_rotary_pos_emb(cache, more_key_states, past_kv_seq_len, kv_seq_len)
-    
-    layer.prefill_pos_key_states = pos_key_states = torch.cat([layer.prefill_pos_key_states, pos_more_key_states], dim=1)
-    layer.prefill_value_states = value_states = torch.cat([layer.prefill_value_states, more_value_states], dim=1)
-
-    attn_weights = torch.matmul(pos_query_states, pos_key_states.transpose(1, 2)) / math.sqrt(head_dim(cache))
-    # 不需要 causal mask
-    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(pos_query_states.dtype)
-    attn_tmp_output1 = torch.matmul(attn_weights, value_states)
-    attn_tmp_output2 = attn_tmp_output1.transpose(0, 1)
-    attn_tmp_output3 = attn_tmp_output2.reshape(q_len, config['hidden_size'])
-    attn_output = o_proj(cache, layer, attn_tmp_output3)
-    return attn_output
-
-def prefill_self_attn(cache: GlobalCache, layer: LayerCache, input_layernormed):
-    config = model_config(cache)
-    q_len, _ = input_layernormed.size()
-    prefill_query_states = q_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
-    log_tensor(locals(), 'prefill_query_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_input_layernormed'])
-    prefill_key_states = k_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
-    log_tensor(locals(), 'prefill_key_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_input_layernormed'])
-    layer.prefill_value_states = prefill_value_states = v_proj(cache, layer, input_layernormed).view(q_len, config['num_attention_heads'], head_dim(cache)).transpose(0, 1)
-    log_tensor(locals(), 'prefill_value_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_input_layernormed'])
-    prefill_pos_query_states = apply_rotary_pos_emb(cache, prefill_query_states, 0, q_len)
-    log_tensor(locals(), 'prefill_pos_query_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_query_states'])
-    layer.prefill_pos_key_states = prefill_pos_key_states = apply_rotary_pos_emb(cache, prefill_key_states, 0, q_len)
-    log_tensor(locals(), 'prefill_pos_key_states', ['头的个数', '填充缓存的token序列', '每头 hidden size'], ['prefill_key_states'])
-    prefill_unmasked_attn_weights = torch.matmul(prefill_pos_query_states, prefill_pos_key_states.transpose(1, 2)) / math.sqrt(head_dim(cache))
-    log_tensor(locals(), 'prefill_unmasked_attn_weights', 
-               ['头的个数', '填充缓存的token序列', '填充缓存的token序列'], 
-               ['prefill_pos_query_states', 'prefill_pos_key_states'])
-    prefill_causal_mask = causal_mask_of_seq(cache, q_len)
-    log_tensor(locals(), 'prefill_causal_mask', 
-               ['固定为1,表示对所有的头使用相同的mask', '填充缓存的token序列', '填充缓存的token序列'], [])
-    prefill_masked_attn_weights = torch.max(
-        prefill_unmasked_attn_weights + prefill_causal_mask, torch.tensor(torch.finfo(prefill_unmasked_attn_weights.dtype).min)
-    )
-    log_tensor(locals(), 'prefill_masked_attn_weights', 
-               ['头的个数', '填充缓存的token序列', '填充缓存的token序列'], 
-               ['prefill_unmasked_attn_weights', 'prefill_causal_mask'])
-    prefill_attn_weights = nn.functional.softmax(prefill_masked_attn_weights, dim=-1)
-    log_tensor(locals(), 'prefill_attn_weights', 
-               ['头的个数', '填充缓存的token序列', '填充缓存的token序列'], ['prefill_masked_attn_weights'])
-    prefill_attn_tmp_output1 = torch.matmul(prefill_attn_weights, prefill_value_states)
-    log_tensor(locals(), 'prefill_attn_tmp_output1', 
-               ['头的个数', '填充缓存的token序列',  '每头 hidden size'], 
-               ['prefill_attn_weights', 'prefill_value_states'])
-    prefill_attn_tmp_output2 = prefill_attn_tmp_output1.transpose(0, 1)
-    log_tensor(locals(), 'prefill_attn_tmp_output2', 
-               ['填充缓存的token序列', '头的个数', '每头 hidden size'], ['prefill_attn_tmp_output1'])
-    prefill_attn_tmp_output3 = prefill_attn_tmp_output2.reshape(q_len, config['hidden_size'])
-    log_tensor(locals(), 'prefill_attn_tmp_output3', 
-               ['填充缓存的token序列', '模型 hidden size'], ['prefill_attn_tmp_output2'])
-    attn_output = o_proj(cache, layer, prefill_attn_tmp_output3)
-    return attn_output
-
 def q_proj(cache: GlobalCache, layer: LayerCache, input_layernormed):
     if layer.q_proj is None:
         config = model_config(cache)
@@ -445,12 +491,6 @@ def up_proj(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
         layer.up_proj = nn.Linear(config['hidden_size'], config['intermediate_size'], bias=False)
         layer.up_proj.weight = nn.Parameter(load_safetensors(cache, f'model.layers.{layer.index}.mlp.up_proj.weight'))
     return layer.up_proj.forward(attn_output_layernormed)
-
-def mlp(cache: GlobalCache, layer: LayerCache, attn_output_layernormed):
-    gate_projected = gate_proj(cache, layer, attn_output_layernormed)
-    up_projected = up_proj(cache, layer, attn_output_layernormed)
-    activated = nn.functional.silu(gate_projected) * up_projected
-    return down_proj(cache, layer, activated)
 
 with torch.inference_mode():
     main()
